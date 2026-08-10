@@ -65,7 +65,11 @@ export function isActivelyDownloading(state: string): boolean {
 }
 
 export class QbtAuthError extends Error {}
-export class QbtApiError extends Error {}
+export class QbtApiError extends Error {
+  constructor(message: string, public status?: number) {
+    super(message);
+  }
+}
 
 export class QbittorrentClient {
   private http: AxiosInstance;
@@ -136,9 +140,42 @@ export class QbittorrentClient {
       return this.request(method, url, opts, true);
     }
     if (res.status >= 400) {
-      throw new QbtApiError(`qBittorrent API error: ${method} ${url} -> HTTP ${res.status}`);
+      throw new QbtApiError(`qBittorrent API error: ${method} ${url} -> HTTP ${res.status}`, res.status);
     }
     return res.data;
+  }
+
+  // qBittorrent 5.0's WebAPI renamed torrents/pause -> torrents/stop and
+  // torrents/resume -> torrents/start (same request shape, just a new
+  // path); older versions only have the original names. Rather than
+  // parsing WebAPI version numbers, try the candidates in order and
+  // remember whichever one actually works (per action, per client
+  // instance) so it's only a single extra round-trip ever, on first use.
+  private resolvedActionPaths: Record<string, string> = {};
+
+  private async postWithFallback(actionKey: string, candidatePaths: string[], data: string): Promise<void> {
+    const cached = this.resolvedActionPaths[actionKey];
+    const order = cached ? [cached, ...candidatePaths.filter((p) => p !== cached)] : candidatePaths;
+
+    let lastErr: unknown;
+    for (const path of order) {
+      try {
+        await this.request('POST', path, {
+          data,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+        this.resolvedActionPaths[actionKey] = path;
+        return;
+      } catch (err) {
+        lastErr = err;
+        // Only keep trying alternates for "this endpoint doesn't exist on
+        // this qBittorrent version" (404). Any other error (auth, 5xx,
+        // network) is real and should surface immediately, not be masked
+        // by trying every candidate path.
+        if (!(err instanceof QbtApiError) || err.status !== 404) throw err;
+      }
+    }
+    throw lastErr;
   }
 
   async version(): Promise<string> {
@@ -176,17 +213,13 @@ export class QbittorrentClient {
   }
 
   async pause(hashes: string[]): Promise<void> {
-    await this.request('POST', '/api/v2/torrents/pause', {
-      data: new URLSearchParams({ hashes: hashes.join('|') }).toString(),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const data = new URLSearchParams({ hashes: hashes.join('|') }).toString();
+    await this.postWithFallback('pause', ['/api/v2/torrents/pause', '/api/v2/torrents/stop'], data);
   }
 
   async resume(hashes: string[]): Promise<void> {
-    await this.request('POST', '/api/v2/torrents/resume', {
-      data: new URLSearchParams({ hashes: hashes.join('|') }).toString(),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const data = new URLSearchParams({ hashes: hashes.join('|') }).toString();
+    await this.postWithFallback('resume', ['/api/v2/torrents/resume', '/api/v2/torrents/start'], data);
   }
 
   async recheck(hashes: string[]): Promise<void> {

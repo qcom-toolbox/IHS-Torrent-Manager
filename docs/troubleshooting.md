@@ -81,6 +81,21 @@ Run `sudo ./fix-install.sh` after `git pull` to pick up the corrected
 unit files (the directive has been removed from all three Node services;
 qBittorrent itself, being a native binary with no JIT, was never affected).
 
+### "qBittorrent request failed: ... POST /api/v2/torrents/pause -> HTTP 404"
+
+qBittorrent 5.0 renamed its WebAPI endpoints `torrents/pause` →
+`torrents/stop` and `torrents/resume` → `torrents/start` (same request
+shape, new path). If your `apt install qbittorrent-nox` pulled in a 5.x
+build, every pause-based action -- the Pause/Stop buttons, and the
+Settings → Downloading/Uploading master switches -- would fail with
+exactly this 404 against versions of the app built before this fix.
+Fixed: `QbittorrentClient.pause()`/`resume()` now try the old endpoint
+first and automatically fall back to the new one on a 404, caching
+whichever one actually works so it's only ever one extra request, on
+first use. No configuration needed -- `git pull && sudo ./upgrade.sh`
+picks up the fix; nothing needs to be reconfigured for your specific
+qBittorrent version.
+
 ### Blank management panel / unstyled portal login when accessed over plain HTTP
 
 If `curl` against the panel/portal returns everything correctly (`200`,

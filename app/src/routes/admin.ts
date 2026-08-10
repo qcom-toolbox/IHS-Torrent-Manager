@@ -91,8 +91,9 @@ router.get('/bandwidth', async (_req, res) => {
   try {
     const limits = await qbt.getSpeedLimits();
     res.json(limits);
-  } catch {
-    res.status(502).json({ error: 'Unable to fetch bandwidth limits from qBittorrent' });
+  } catch (err: any) {
+    console.error('[admin] failed to fetch bandwidth limits from qBittorrent:', err);
+    res.status(502).json({ error: `Unable to fetch bandwidth limits from qBittorrent: ${err.message}` });
   }
 });
 
@@ -109,8 +110,9 @@ router.put('/bandwidth', requireCsrf, async (req: AuthedRequest, res) => {
 
   try {
     await qbt.setSpeedLimits(dl, ul);
-  } catch {
-    res.status(502).json({ error: 'Unable to update bandwidth limits on qBittorrent' });
+  } catch (err: any) {
+    console.error('[admin] failed to set bandwidth limits on qBittorrent:', err);
+    res.status(502).json({ error: `Unable to update bandwidth limits on qBittorrent: ${err.message}` });
     return;
   }
 
@@ -175,8 +177,11 @@ router.put('/transfer-policy', requireCsrf, async (req: AuthedRequest, res) => {
   if (hashesToPause.length > 0) {
     try {
       await qbt.pause(hashesToPause);
-    } catch {
-      res.status(502).json({ error: 'Updated the policy, but failed to pause matching torrents on qBittorrent' });
+    } catch (err: any) {
+      console.error('[admin] transfer-policy: failed to pause matching torrents on qBittorrent:', err);
+      res
+        .status(502)
+        .json({ error: `Updated the policy, but failed to pause matching torrents on qBittorrent: ${err.message}` });
       return;
     }
   }
