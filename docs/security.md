@@ -202,7 +202,19 @@ scripts, no framing).
 - `COOKIE_SECURE=true` (set this once you're behind HTTPS, see
   [configuration.md](configuration.md)) marks session cookies `Secure`, so
   they're never sent over a plaintext connection even if one is somehow
-  reachable.
+  reachable. It also gates three CSP/Helmet behaviors that only make sense
+  once TLS is actually in front: `upgrade-insecure-requests`,
+  `Cross-Origin-Opener-Policy`, and `Origin-Agent-Cluster`. Confirmed
+  against a real browser during deployment: leaving
+  `upgrade-insecure-requests` on while serving plain HTTP makes the
+  browser silently rewrite every asset/API/form request to `https://`;
+  with no TLS listener on that port, every one of those requests fails
+  with `ERR_SSL_PROTOCOL_ERROR` -- a blank management panel, an unstyled
+  portal login, blocked form submissions -- while `curl` against the same
+  server sees nothing wrong at all, since CSP is purely a browser-enforced
+  mechanism. This is why `COOKIE_SECURE` defaults to `false` and must be
+  turned on deliberately once (and only once) a reverse proxy with a real
+  certificate is actually in front.
 - The installer's optional nginx/Caddy integration exists specifically to
   get you onto HTTPS with a real certificate (Caddy does this
   automatically; nginx needs a separate `certbot --nginx` run, called out

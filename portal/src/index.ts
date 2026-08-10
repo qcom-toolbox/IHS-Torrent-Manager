@@ -95,18 +95,28 @@ export function createApp(): Express {
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
 
+  const cspDirectives: Record<string, Iterable<string> | null> = {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'"],
+    imgSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+  };
+  // See app/src/index.ts for the full explanation: Helmet's default
+  // upgrade-insecure-requests directive breaks plain-HTTP operation
+  // outright (browser rewrites asset/form requests to https://, which
+  // has no listener here, so they fail with ERR_SSL_PROTOCOL_ERROR).
+  // Only enable it once actually behind TLS.
+  if (!portalConfig.cookieSecure) {
+    cspDirectives.upgradeInsecureRequests = null;
+  }
+
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
-          styleSrc: ["'self'"],
-          imgSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          frameAncestors: ["'none'"],
-        },
-      },
+      contentSecurityPolicy: { directives: cspDirectives },
+      crossOriginOpenerPolicy: portalConfig.cookieSecure ? true : false,
+      originAgentCluster: portalConfig.cookieSecure ? true : false,
       hsts: { maxAge: 15552000, includeSubDomains: true },
     })
   );

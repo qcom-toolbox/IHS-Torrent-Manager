@@ -81,6 +81,33 @@ Run `sudo ./fix-install.sh` after `git pull` to pick up the corrected
 unit files (the directive has been removed from all three Node services;
 qBittorrent itself, being a native binary with no JIT, was never affected).
 
+### Blank management panel / unstyled portal login when accessed over plain HTTP
+
+If `curl` against the panel/portal returns everything correctly (`200`,
+right `Content-Type`, right bytes) but your **browser** shows a blank
+page (panel) or a login page with no CSS (portal), open DevTools →
+Console. If you see `net::ERR_SSL_PROTOCOL_ERROR` on requests to
+`https://<host>:3000/assets/...` even though you typed `http://` in the
+address bar, this is `COOKIE_SECURE=true` being set while there's no
+actual TLS listener on that port. With it on, the CSP sent to the browser
+includes `upgrade-insecure-requests`, which makes the browser silently
+rewrite every asset/API/form request to `https://` -- and those all fail
+outright with nothing listening for TLS. Fix: leave `COOKIE_SECURE=false`
+in `app.env`/`portal.env` until you've actually put a reverse proxy with
+a real certificate in front (see [configuration.md](configuration.md)
+and [security.md](security.md#transport-security-https)), then restart
+the affected service(s).
+
+If instead you're accessing the panel/portal from another device on your
+network and get no response at all (not even a blank page -- the
+connection itself fails), that's a *different* issue: `APP_HOST`/
+`PORTAL_HOST` default to `127.0.0.1` (loopback only, deliberately). Either
+tunnel in (`ssh -L 3000:127.0.0.1:3000 -L 3001:127.0.0.1:3001 user@host`)
+or, for trusted-LAN access, set `APP_HOST=0.0.0.0` /
+`PORTAL_HOST=0.0.0.0` in the respective env file and restart. Never do
+this for `TORRENT_HOST`/qBittorrent's own bind address -- that one must
+stay on `127.0.0.1`.
+
 ## Management panel won't start
 
 ```bash

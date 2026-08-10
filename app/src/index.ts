@@ -38,23 +38,41 @@ export function createApp(): express.Express {
   app.disable('x-powered-by');
   if (appConfig.trustProxy) app.set('trust proxy', 1);
 
+  const cspDirectives: Record<string, Iterable<string> | null> = {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:'],
+    connectSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+  };
+  // Helmet includes upgrade-insecure-requests by default. It tells the
+  // browser to silently rewrite every subresource request (scripts,
+  // stylesheets, fetch/XHR) to https:// before sending it -- great once
+  // this is actually served over TLS, but fatal when it isn't: with no
+  // HTTPS listener on this port, every asset request fails with
+  // ERR_SSL_PROTOCOL_ERROR and the page never renders (confirmed against
+  // a real browser: white page on the panel, unstyled login on the
+  // portal, form submissions blocked by form-action). Only enable it
+  // once COOKIE_SECURE=true, i.e. once there's a real TLS-terminating
+  // reverse proxy in front.
+  if (!appConfig.cookieSecure) {
+    cspDirectives.upgradeInsecureRequests = null;
+  }
+
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'"],
-          objectSrc: ["'none'"],
-          frameAncestors: ["'none'"],
-        },
-      },
-      // Sent unconditionally (harmless over plain HTTP, enforced by
-      // browsers only once received over a real HTTPS connection) so that
-      // once this is deployed behind TLS -- which it always should be --
-      // browsers immediately start refusing to fall back to HTTP.
+      contentSecurityPolicy: { directives: cspDirectives },
+      // Same reasoning: these only make sense -- and browsers only honor
+      // them -- once the origin is actually HTTPS. Sending them over plain
+      // HTTP just produces console warnings ("origin was untrustworthy"),
+      // so skip them until we know we're behind TLS.
+      crossOriginOpenerPolicy: appConfig.cookieSecure ? true : false,
+      originAgentCluster: appConfig.cookieSecure ? true : false,
+      // HSTS itself is still safe to send unconditionally: browsers only
+      // ever act on it once received over a real HTTPS connection, so it
+      // never breaks plain-HTTP operation the way the directives above do.
       hsts: { maxAge: 15552000, includeSubDomains: true },
     })
   );
