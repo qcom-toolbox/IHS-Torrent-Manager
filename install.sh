@@ -427,6 +427,18 @@ initialize_database() {
 # qBittorrent bootstrap
 # ---------------------------------------------------------------------------
 
+wait_for_qbittorrent_webui() {
+  local tries=0
+  until curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if (( tries > 30 )); then
+      return 1
+    fi
+    sleep 1
+  done
+  return 0
+}
+
 bootstrap_qbittorrent() {
   header "Configuring qBittorrent"
 
@@ -452,16 +464,11 @@ EOF
   systemctl enable --now qbittorrent-nox >/dev/null
 
   log "Waiting for qBittorrent WebUI to become available..."
-  local tries=0
-  until curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; do
-    tries=$((tries + 1))
-    if (( tries > 30 )); then
-      fail "qBittorrent WebUI did not become available on port $QBT_PORT."
-      echo "  Diagnostics: systemctl status qbittorrent-nox ; journalctl -u qbittorrent-nox -n 50"
-      die "qBittorrent bootstrap failed"
-    fi
-    sleep 1
-  done
+  if ! wait_for_qbittorrent_webui; then
+    fail "qBittorrent WebUI did not become available on port $QBT_PORT."
+    echo "  Diagnostics: systemctl status qbittorrent-nox ; journalctl -u qbittorrent-nox -n 50"
+    die "qBittorrent bootstrap failed"
+  fi
   ok "qBittorrent WebUI is responding"
 
   # Recent qBittorrent (4.6+) logs a randomly generated temporary WebUI
@@ -494,7 +501,11 @@ EOF
   rm -f "$candidates_file"
 
   systemctl restart qbittorrent-nox
-  sleep 2
+  log "Waiting for qBittorrent WebUI to come back up after the final restart..."
+  if ! wait_for_qbittorrent_webui; then
+    warn "qBittorrent WebUI did not respond within 30s after the final restart -- it may just be slow to start on this hardware."
+    warn "Diagnostics: systemctl status qbittorrent-nox ; journalctl -u qbittorrent-nox -n 50"
+  fi
 }
 
 # ---------------------------------------------------------------------------

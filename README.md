@@ -154,6 +154,13 @@ sudo ./upgrade.sh
 the existing installation). Your database, torrent data, users, and
 secrets are preserved.
 
+If a previous install *attempt* hit a problem rather than completing
+cleanly, use `sudo ./fix-install.sh` instead — it re-applies the current
+code and systemd unit files and restarts everything (equivalent to
+"Repair"), without touching accounts or torrent data. See
+[docs/troubleshooting.md](docs/troubleshooting.md) for common cases this
+resolves.
+
 ## Uninstalling
 
 ```bash

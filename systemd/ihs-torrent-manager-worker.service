@@ -30,7 +30,12 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# NOT MemoryDenyWriteExecute: Node's V8 JIT needs to mprotect() memory as
+# writable+executable during startup (CodeRange::RemapEmbeddedBuiltins).
+# Under this directive's seccomp filter that call is denied, and V8
+# crashes immediately with "Fatal error ... Check failed: 12 ==
+# (*__errno_location())" (ENOMEM from the blocked mprotect) -- this is a
+# known Node/systemd hardening incompatibility, not safe to enable here.
 
 StandardOutput=journal
 StandardError=journal

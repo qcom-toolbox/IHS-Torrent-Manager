@@ -34,6 +34,38 @@ exact diagnostic commands to run. Common causes:
   SSH-tunnel to the WebUI port and set credentials manually, then re-run
   the installer's **Repair** option.
 
+### Quick fix after `git pull`
+
+If a previous install attempt hit a problem that's since been fixed
+upstream (e.g. a bad systemd hardening directive, a unit-file ordering
+bug), you don't need to re-run the full interactive installer:
+
+```bash
+cd IHS-Torrent-Manager
+git pull
+sudo ./fix-install.sh
+```
+
+This re-deploys the current code, re-renders and reinstalls the systemd
+unit files, re-verifies qBittorrent's WebUI credentials, and restarts
+every service — fully non-interactive, and it never touches the admin
+account, the portal password, or torrent data. It's equivalent to
+`sudo ./install.sh` → **Repair**, just without the menu.
+
+### Node/V8 crash-looping right after install (`Check failed: 12 == ...`)
+
+If `systemctl status ihs-torrent-manager` (or `-worker`/`-portal`) shows
+`code=killed, signal=TRAP` and the journal shows a V8 `Fatal error` /
+`Check failed: 12 == (*__errno_location())` inside
+`CodeRange::RemapEmbeddedBuiltins`, that's Node's V8 JIT being blocked by
+the `MemoryDenyWriteExecute=true` systemd hardening directive (V8 needs to
+`mprotect()` memory as writable+executable at startup; that directive's
+seccomp filter denies it, and V8 crashes immediately instead of falling
+back). This was present in unit files generated before this fix landed.
+Run `sudo ./fix-install.sh` after `git pull` to pick up the corrected
+unit files (the directive has been removed from all three Node services;
+qBittorrent itself, being a native binary with no JIT, was never affected).
+
 ## Management panel won't start
 
 ```bash
