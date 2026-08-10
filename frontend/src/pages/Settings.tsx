@@ -17,6 +17,12 @@ export default function Settings() {
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [savingPortalPassword, setSavingPortalPassword] = useState(false);
 
+  // Displayed/edited in KB/s for usability; the API speaks bytes/sec
+  // (qBittorrent's own convention). "0" means unlimited, same as qBittorrent.
+  const [bandwidth, setBandwidth] = useState<{ downloadKb: string; uploadKb: string } | null>(null);
+  const [savingBandwidth, setSavingBandwidth] = useState(false);
+  const [bandwidthError, setBandwidthError] = useState<string | null>(null);
+
   useEffect(() => {
     if (user?.isAdmin) {
       api.get<{ settings: Record<string, string> }>('/admin/settings').then((res) => {
@@ -26,6 +32,15 @@ export default function Settings() {
           disk_block_percent_free: res.settings.disk_block_percent_free ?? '5',
         });
       });
+      api
+        .get<{ downloadLimit: number; uploadLimit: number }>('/admin/bandwidth')
+        .then((res) => {
+          setBandwidth({
+            downloadKb: String(Math.round(res.downloadLimit / 1024)),
+            uploadKb: String(Math.round(res.uploadLimit / 1024)),
+          });
+        })
+        .catch((err) => setBandwidthError(err instanceof ApiError ? err.message : 'Unable to load bandwidth limits'));
     }
   }, [user?.isAdmin]);
 
@@ -55,6 +70,22 @@ export default function Settings() {
       notify(err instanceof ApiError ? err.message : 'Failed to update thresholds', 'error');
     } finally {
       setSavingThresholds(false);
+    }
+  }
+
+  async function handleBandwidthSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!bandwidth) return;
+    const downloadLimit = Math.max(0, Math.round(Number(bandwidth.downloadKb) || 0)) * 1024;
+    const uploadLimit = Math.max(0, Math.round(Number(bandwidth.uploadKb) || 0)) * 1024;
+    setSavingBandwidth(true);
+    try {
+      await api.put('/admin/bandwidth', { downloadLimit, uploadLimit });
+      notify('Bandwidth limits updated', 'success');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Failed to update bandwidth limits', 'error');
+    } finally {
+      setSavingBandwidth(false);
     }
   }
 
@@ -117,6 +148,33 @@ export default function Settings() {
               </div>
               <button type="submit" disabled={savingThresholds} className="btn mt-2">Save thresholds</button>
             </form>
+          </div>
+
+          <div className="card max-w-lg">
+            <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">Bandwidth limits</h2>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+              Global upload/download speed limits, applied to qBittorrent directly (not per-torrent). Leave at 0 for unlimited.
+            </p>
+            {bandwidthError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                {bandwidthError}
+              </div>
+            )}
+            {bandwidth && (
+              <form onSubmit={handleBandwidthSave} className="flex flex-col gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Download limit (KB/s, 0 = unlimited)</label>
+                  <input type="number" min={0} className="input" value={bandwidth.downloadKb}
+                    onChange={(e) => setBandwidth({ ...bandwidth, downloadKb: e.target.value })} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Upload limit (KB/s, 0 = unlimited)</label>
+                  <input type="number" min={0} className="input" value={bandwidth.uploadKb}
+                    onChange={(e) => setBandwidth({ ...bandwidth, uploadKb: e.target.value })} />
+                </div>
+                <button type="submit" disabled={savingBandwidth} className="btn mt-2">Save bandwidth limits</button>
+              </form>
+            )}
           </div>
 
           <div className="card max-w-lg">

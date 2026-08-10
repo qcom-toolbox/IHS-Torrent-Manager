@@ -112,3 +112,14 @@ refreshing every 15 seconds without a full page reload. Warning/critical
 thresholds are configurable from Settings and enforced both in the UI
 (color-coded) and in the backend (new uploads are rejected once free space
 drops below the block threshold, regardless of what the UI shows).
+
+## Bandwidth limits
+
+Settings → **Bandwidth limits** (admin only) sets global upload/download
+speed caps, entered in KB/s (0 = unlimited). These are applied directly to
+qBittorrent's own rate limiter via its Web API
+(`/api/v2/transfer/setDownloadLimit` / `setUploadLimit`) — the application
+doesn't implement any throttling itself, and the limits are global (all
+torrents combined), not per-torrent or per-user. Changes take effect
+immediately, no restart needed.
+

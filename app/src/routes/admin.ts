@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Users, Torrents, Settings, AuditLog, hashPassword, isPasswordStrongEnough } from '@ihs-torrent-manager/shared';
 import { requireAuth, requireAdmin, AuthedRequest } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
+import { qbt } from '../services/qbt';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -71,6 +72,48 @@ router.put('/portal-password', requireCsrf, async (req: AuthedRequest, res) => {
   Settings.set('portal_password_hash', hash);
   AuditLog.record(req.currentUser!.id, 'portal_password_change', 'settings', undefined, undefined, req.ip);
   res.json({ ok: true });
+});
+
+// Global (not per-torrent) upload/download speed limits, delegated
+// entirely to qBittorrent's own rate limiter via its Web API -- the app
+// doesn't implement any throttling itself. Values are bytes/sec; 0 means
+// unlimited (matches qBittorrent's own convention).
+router.get('/bandwidth', async (_req, res) => {
+  try {
+    const limits = await qbt.getSpeedLimits();
+    res.json(limits);
+  } catch {
+    res.status(502).json({ error: 'Unable to fetch bandwidth limits from qBittorrent' });
+  }
+});
+
+router.put('/bandwidth', requireCsrf, async (req: AuthedRequest, res) => {
+  const { downloadLimit, uploadLimit } = req.body ?? {};
+  const dl = Number(downloadLimit);
+  const ul = Number(uploadLimit);
+  if (!Number.isFinite(dl) || dl < 0 || !Number.isFinite(ul) || ul < 0) {
+    res.status(400).json({
+      error: 'downloadLimit and uploadLimit must be non-negative numbers (bytes/sec, 0 = unlimited)',
+    });
+    return;
+  }
+
+  try {
+    await qbt.setSpeedLimits(dl, ul);
+  } catch {
+    res.status(502).json({ error: 'Unable to update bandwidth limits on qBittorrent' });
+    return;
+  }
+
+  AuditLog.record(
+    req.currentUser!.id,
+    'bandwidth_limits_update',
+    'settings',
+    undefined,
+    { downloadLimit: dl, uploadLimit: ul },
+    req.ip
+  );
+  res.json({ ok: true, downloadLimit: dl, uploadLimit: ul });
 });
 
 export default router;

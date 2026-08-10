@@ -190,4 +190,26 @@ export class QbittorrentClient {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
   }
+
+  /** Global (not per-torrent) speed limits, in bytes/sec. 0 means unlimited. */
+  async getSpeedLimits(): Promise<{ downloadLimit: number; uploadLimit: number }> {
+    const [dl, ul] = await Promise.all([
+      this.request('GET', '/api/v2/transfer/downloadLimit'),
+      this.request('GET', '/api/v2/transfer/uploadLimit'),
+    ]);
+    return { downloadLimit: Number(dl) || 0, uploadLimit: Number(ul) || 0 };
+  }
+
+  async setSpeedLimits(downloadLimitBytesPerSec: number, uploadLimitBytesPerSec: number): Promise<void> {
+    await Promise.all([
+      this.request('POST', '/api/v2/transfer/setDownloadLimit', {
+        data: new URLSearchParams({ limit: String(Math.max(0, Math.trunc(downloadLimitBytesPerSec))) }).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+      this.request('POST', '/api/v2/transfer/setUploadLimit', {
+        data: new URLSearchParams({ limit: String(Math.max(0, Math.trunc(uploadLimitBytesPerSec))) }).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    ]);
+  }
 }
