@@ -501,8 +501,15 @@ EOF
 # systemd
 # ---------------------------------------------------------------------------
 
-install_systemd_units() {
-  header "Configuring systemd Services"
+# Writes/refreshes the unit files and reloads systemd's view of them, but
+# does not enable or start anything. Split out from install_systemd_units()
+# so it can run BEFORE bootstrap_qbittorrent() -- on a genuinely fresh
+# ("barebone") server, /etc/systemd/system/qbittorrent-nox.service does not
+# exist yet, and `systemctl enable --now qbittorrent-nox` inside
+# bootstrap_qbittorrent() would otherwise fail with "Unit ... does not
+# exist" because the unit file hadn't been installed yet.
+write_systemd_unit_files() {
+  header "Installing systemd Unit Files"
 
   local src dest
   for name in ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox; do
@@ -516,9 +523,13 @@ install_systemd_units() {
       -e "s#__SERVICE_USER__#${SERVICE_USER}#g" \
       "$src" > "$dest"
   done
-  ok "Unit files written to $SYSTEMD_DIR"
-
   systemctl daemon-reload
+  ok "Unit files written to $SYSTEMD_DIR"
+}
+
+install_systemd_units() {
+  header "Configuring systemd Services"
+
   systemctl enable qbittorrent-nox ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal >/dev/null
   ok "Services enabled at boot"
 
@@ -781,6 +792,7 @@ run_fresh_install() {
   build_application
   write_env_files
   initialize_database
+  write_systemd_unit_files
   bootstrap_qbittorrent
   install_systemd_units
   configure_firewall
@@ -802,6 +814,7 @@ run_upgrade() {
   build_application
   write_env_files
   initialize_database_upgrade_only
+  write_systemd_unit_files
   install_systemd_units
   save_state
   run_health_checks
@@ -828,6 +841,7 @@ run_repair() {
   build_application
   write_env_files
   initialize_database_upgrade_only
+  write_systemd_unit_files
   bootstrap_qbittorrent
   install_systemd_units
   run_health_checks
@@ -860,6 +874,7 @@ run_reconfigure() {
 
   write_env_files
   [[ -n "$ADMIN_USERNAME" || -n "$PORTAL_PASSWORD" ]] && initialize_database
+  write_systemd_unit_files
   bootstrap_qbittorrent
   install_systemd_units
   configure_firewall
