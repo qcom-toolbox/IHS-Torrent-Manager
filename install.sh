@@ -685,6 +685,23 @@ EOF
 # Health checks
 # ---------------------------------------------------------------------------
 
+# Node needs a moment after `systemctl restart` to load config, open the
+# database, and bind its port -- a single immediate curl right after
+# install_systemd_units() restarts everything is a real race, especially
+# on the repair/reconfigure paths which (unlike a fresh install) have no
+# interactive prompts in between to incidentally cover that startup time.
+wait_for_http_ok() {
+  local url="$1" tries=0
+  until curl -fs "$url" >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if (( tries > 10 )); then
+      return 1
+    fi
+    sleep 1
+  done
+  return 0
+}
+
 run_health_checks() {
   header "Health Checks"
 
@@ -698,7 +715,7 @@ run_health_checks() {
   if systemctl is-active --quiet ihs-torrent-manager-worker; then ok "Torrent Worker"; else fail "Torrent Worker service is not running"; all_ok=0; fi
 
   if systemctl is-active --quiet ihs-torrent-manager; then
-    if curl -fs "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null 2>&1; then
+    if wait_for_http_ok "http://127.0.0.1:${APP_PORT}/api/health"; then
       ok "Management Panel"
     else
       fail "Management Panel service is running but not responding on port $APP_PORT"
@@ -710,7 +727,7 @@ run_health_checks() {
   fi
 
   if systemctl is-active --quiet ihs-torrent-manager-portal; then
-    if curl -fs "http://127.0.0.1:${PORTAL_PORT}/health" >/dev/null 2>&1; then
+    if wait_for_http_ok "http://127.0.0.1:${PORTAL_PORT}/health"; then
       ok "Download Portal"
     else
       fail "Download Portal service is running but not responding on port $PORTAL_PORT"
