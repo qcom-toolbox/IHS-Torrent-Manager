@@ -52,6 +52,21 @@ every service — fully non-interactive, and it never touches the admin
 account, the portal password, or torrent data. It's equivalent to
 `sudo ./install.sh` → **Repair**, just without the menu.
 
+### "qBittorrent bootstrap failed" / "qBittorrent WebUI not responding" even though it's actually up
+
+If `systemctl status qbittorrent-nox` shows it `active (running)` with no
+errors, and `curl -v http://127.0.0.1:8080/api/v2/app/version` returns a
+clean `403 Forbidden` (not "connection refused"), qBittorrent is healthy
+-- this was a bug in the installer's readiness check, not a real problem.
+`qbt-bootstrap.js` deliberately configures qBittorrent to require
+authentication even from `127.0.0.1` (`bypass_local_auth: false` --
+localhost isn't blindly trusted), so an unauthenticated probe correctly
+gets a 403. Older versions of `install.sh`/`scripts/healthcheck.sh` used
+`curl -f`, which treats *any* non-2xx response as "down", including this
+expected 403. Fixed to accept any HTTP response (403 included) as proof
+the WebUI is reachable. `git pull && sudo ./fix-install.sh` picks up the
+fix.
+
 ### Node/V8 crash-looping right after install (`Check failed: 12 == ...`)
 
 If `systemctl status ihs-torrent-manager` (or `-worker`/`-portal`) shows

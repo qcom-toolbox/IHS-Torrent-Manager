@@ -427,9 +427,22 @@ initialize_database() {
 # qBittorrent bootstrap
 # ---------------------------------------------------------------------------
 
+# Checks that qBittorrent's WebUI is up and speaking HTTP -- NOT that it's
+# unauthenticated. qbt-bootstrap.js deliberately sets bypass_local_auth to
+# false (even 127.0.0.1 must authenticate), so a healthy, fully-configured
+# WebUI legitimately answers with 403 to this unauthenticated probe. `curl
+# -f` treats any non-2xx as failure, which would misreport a perfectly
+# healthy WebUI as down -- so this checks for "we got some HTTP response
+# at all" (any 3-digit status code) rather than "we got a 2xx".
+qbt_webui_reachable() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" 2>/dev/null)"
+  [[ "$code" =~ ^[0-9]{3}$ && "$code" != "000" ]]
+}
+
 wait_for_qbittorrent_webui() {
   local tries=0
-  until curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; do
+  until qbt_webui_reachable; do
     tries=$((tries + 1))
     if (( tries > 30 )); then
       return 1
@@ -678,7 +691,7 @@ run_health_checks() {
   local all_ok=1
 
   if systemctl is-active --quiet qbittorrent-nox; then ok "qBittorrent service is running"; else fail "qBittorrent service is not running"; all_ok=0; fi
-  if curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; then ok "qBittorrent"; else fail "qBittorrent WebUI not responding"; all_ok=0; fi
+  if qbt_webui_reachable; then ok "qBittorrent"; else fail "qBittorrent WebUI not responding"; all_ok=0; fi
 
   if [[ -f "$DATA_DIR/ihs-torrent-manager.sqlite" ]]; then ok "Database"; else fail "Database file not found"; all_ok=0; fi
 

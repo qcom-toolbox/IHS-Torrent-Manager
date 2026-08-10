@@ -32,7 +32,16 @@ for svc in qbittorrent-nox ihs-torrent-manager ihs-torrent-manager-worker ihs-to
   fi
 done
 
-if curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; then ok "qBittorrent WebUI responding"; else fail "qBittorrent WebUI not responding on port $QBT_PORT"; fi
+# A healthy, fully-bootstrapped qBittorrent WebUI requires authentication
+# even from localhost (bypass_local_auth is deliberately left off -- see
+# install.sh), so it legitimately answers this unauthenticated probe with
+# 403. Any HTTP response at all (not "connection refused") means it's up.
+qbt_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" 2>/dev/null)"
+if [[ "$qbt_code" =~ ^[0-9]{3}$ && "$qbt_code" != "000" ]]; then
+  ok "qBittorrent WebUI responding"
+else
+  fail "qBittorrent WebUI not responding on port $QBT_PORT"
+fi
 if curl -fs "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null 2>&1; then ok "Management panel responding"; else fail "Management panel not responding on port $APP_PORT"; fi
 if curl -fs "http://127.0.0.1:${PORTAL_PORT}/health" >/dev/null 2>&1; then ok "Download portal responding"; else fail "Download portal not responding on port $PORTAL_PORT"; fi
 
