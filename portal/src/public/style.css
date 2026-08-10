@@ -63,6 +63,18 @@ button {
 
 button:hover { opacity: 0.9; }
 
+.notice {
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  color: #fcd34d;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
 .error {
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.4);

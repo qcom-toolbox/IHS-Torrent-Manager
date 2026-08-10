@@ -33,6 +33,8 @@ export interface SharedConfig {
   diskWarningPercentFree: number;
   diskCriticalPercentFree: number;
   diskBlockPercentFree: number;
+  /** Optional path to a plain-text access-notice banner shown on both login pages. Unset/missing = no banner. */
+  noticeFilePath: string | undefined;
 }
 
 let cached: SharedConfig | null = null;
@@ -52,6 +54,7 @@ export function loadSharedConfig(): SharedConfig {
     diskWarningPercentFree: intEnv('DISK_WARNING_THRESHOLD_PERCENT_FREE', 20),
     diskCriticalPercentFree: intEnv('DISK_CRITICAL_THRESHOLD_PERCENT_FREE', 10),
     diskBlockPercentFree: intEnv('DISK_BLOCK_THRESHOLD_PERCENT_FREE', 5),
+    noticeFilePath: process.env.NOTICE_FILE_PATH ? path.resolve(process.env.NOTICE_FILE_PATH) : undefined,
   };
   return cached;
 }

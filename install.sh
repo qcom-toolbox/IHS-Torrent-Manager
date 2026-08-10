@@ -45,6 +45,7 @@ QBT_PORT=""
 ADMIN_USERNAME=""
 ADMIN_PASSWORD=""
 PORTAL_PASSWORD=""
+ORG_NAME=""
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -213,6 +214,8 @@ collect_configuration() {
   prompt_secret ADMIN_PASSWORD "Admin password"
   echo
   prompt_secret PORTAL_PASSWORD "Download portal password"
+  echo
+  prompt ORG_NAME "Organization name for the login-page access notice" "the system owner"
 }
 
 # ---------------------------------------------------------------------------
@@ -348,6 +351,7 @@ TORRENT_HOST=http://127.0.0.1:$QBT_PORT
 TORRENT_USERNAME=$qbt_username
 TORRENT_PASSWORD=$qbt_password
 FRONTEND_DIST_DIR=$APP_DIR/frontend/dist
+NOTICE_FILE_PATH=$CONFIG_DIR/notice.txt
 EOF
 
   cat > "$CONFIG_DIR/worker.env" <<EOF
@@ -374,11 +378,26 @@ PORTAL_HOST=127.0.0.1
 PORTAL_SESSION_SECRET=$portal_session_secret
 COOKIE_SECURE=false
 TRUST_PROXY=false
+NOTICE_FILE_PATH=$CONFIG_DIR/notice.txt
 EOF
 
   chown root:"$SERVICE_USER" "$CONFIG_DIR"/*.env
   chmod 640 "$CONFIG_DIR"/*.env
   ok "Environment files written to $CONFIG_DIR (mode 640, readable only by root and $SERVICE_USER)"
+
+  write_notice_file
+}
+
+write_notice_file() {
+  # Preserve an admin's existing custom notice across upgrades/repairs --
+  # only create it from the template on a genuinely fresh install.
+  if [[ ! -f "$CONFIG_DIR/notice.txt" ]]; then
+    local org="${ORG_NAME:-the system owner}"
+    sed "s/__ORG_NAME__/${org//\//\\/}/g" "$APP_DIR/config/notice.txt" > "$CONFIG_DIR/notice.txt"
+    chown root:"$SERVICE_USER" "$CONFIG_DIR/notice.txt"
+    chmod 644 "$CONFIG_DIR/notice.txt"
+    ok "Login-page access notice written to $CONFIG_DIR/notice.txt (edit this file anytime to change the wording)"
+  fi
 }
 
 initialize_database() {

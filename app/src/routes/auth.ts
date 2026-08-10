@@ -1,13 +1,20 @@
 import { Router } from 'express';
-import { Users, AuditLog, LoginAttempts, verifyPassword, hashPassword, isPasswordStrongEnough } from '@torrent-manager/shared';
+import { Users, AuditLog, LoginAttempts, verifyPassword, hashPassword, isPasswordStrongEnough, readNoticeText } from '@torrent-manager/shared';
 import { loginLimiter } from '../middleware/rateLimit';
 import { AuthedRequest, requireAuth } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
+import { shared } from '../config';
 
 const router = Router();
 
 const MAX_RECENT_FAILURES = 10;
 const FAILURE_WINDOW_MS = 15 * 60 * 1000;
+
+// Public (unauthenticated) -- the access-warning banner needs to be visible
+// on the login page itself, before anyone has a session.
+router.get('/notice', (_req, res) => {
+  res.json({ notice: readNoticeText(shared.noticeFilePath) });
+});
 
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body ?? {};

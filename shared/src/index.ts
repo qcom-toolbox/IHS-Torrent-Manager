@@ -8,3 +8,4 @@ export * from './services/diskSpace';
 export * from './services/torrentFiles';
 export * from './qbittorrent/client';
 export * from './sessionStore';
+export * from './notice';

@@ -8,6 +8,9 @@
 </head>
 <body>
   <div class="wrap">
+    <% if (notice) { %>
+      <div class="notice"><%= notice %></div>
+    <% } %>
     <div class="card login-card">
       <h1>Downloads</h1>
       <% if (error) { %>

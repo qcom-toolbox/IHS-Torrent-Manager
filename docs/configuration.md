@@ -26,6 +26,18 @@ place; copy it to `.env` and adjust as needed.
 Disk thresholds can also be changed at runtime from **Settings** in the
 management panel (admin only) — no restart required.
 
+| Variable | Default | Description |
+|---|---|---|
+| `NOTICE_FILE_PATH` | unset | Path to a plain-text access-warning banner shown on **both** login pages. Unset, or a missing/empty file, simply means no banner. |
+
+The installer creates `/etc/torrent-manager/notice.txt` from
+[`config/notice.txt`](../config/notice.txt) on first install (substituting
+the organization name you provide), and points both `app.env` and
+`portal.env` at it. Edit that file anytime — no rebuild or restart
+required, it's read fresh on every page load — to change the wording or
+turn it off (empty the file). Upgrades and repairs never overwrite an
+existing `notice.txt`, only a fresh install creates one.
+
 ## Management panel (`app.env`)
 
 | Variable | Default | Description |

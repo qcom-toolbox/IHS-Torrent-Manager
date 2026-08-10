@@ -17,6 +17,7 @@ import {
   resolveContentRoot,
   listFilesRecursively,
   sanitizeFilename,
+  readNoticeText,
 } from '@torrent-manager/shared';
 import { portalConfig, shared } from './config';
 
@@ -104,6 +105,12 @@ function bootstrap(): void {
     })
   );
   app.use(ensureCsrf);
+  // Available to every EJS template as `notice` without threading it
+  // through each individual res.render() call.
+  app.use((_req, res, next) => {
+    res.locals.notice = readNoticeText(shared.noticeFilePath);
+    next();
+  });
 
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

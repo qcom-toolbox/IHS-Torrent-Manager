@@ -1,0 +1,5 @@
+NOTICE: This system is restricted to authorized users of __ORG_NAME__ only.
+
+If you are accessing this server without being an authorized member of __ORG_NAME__, you are engaging in unauthorized access to a private computer system. Unauthorized access, use, or attempted access is prohibited and may be subject to legal action.
+
+All activity on this system may be monitored, logged, and disclosed as permitted by law.
