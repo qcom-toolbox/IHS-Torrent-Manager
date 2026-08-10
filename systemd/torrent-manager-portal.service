@@ -1,0 +1,43 @@
+# Template unit file -- install.sh substitutes __APP_DIR__, __DATA_DIR__,
+# __DOWNLOAD_DIR__, __CONFIG_DIR__ and __SERVICE_USER__ for the paths/user
+# chosen during installation, then writes the result to
+# /etc/systemd/system/torrent-manager-portal.service.
+[Unit]
+Description=Torrent Manager - Download Portal
+Documentation=https://github.com/qcom-toolbox/torrent-manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__CONFIG_DIR__/portal.env
+ExecStart=/usr/bin/node __APP_DIR__/portal/dist/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# Hardening. Note the portal only ever needs to READ completed torrent
+# data and read/write its own session rows in the database -- it has no
+# business writing into the torrent download directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__DATA_DIR__
+ReadOnlyPaths=__DOWNLOAD_DIR__
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=torrent-manager-portal
+
+[Install]
+WantedBy=multi-user.target

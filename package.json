@@ -1,0 +1,25 @@
+{
+  "name": "torrent-manager",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Self-hosted torrent management platform (management panel + download portal)",
+  "workspaces": [
+    "shared",
+    "app",
+    "worker",
+    "portal",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspace=shared && npm run build --workspace=frontend && npm run build --workspace=app && npm run build --workspace=worker && npm run build --workspace=portal",
+    "migrate": "node shared/dist/db/migrate.js",
+    "dev:app": "npm run dev --workspace=app",
+    "dev:worker": "npm run dev --workspace=worker",
+    "dev:portal": "npm run dev --workspace=portal",
+    "dev:frontend": "npm run dev --workspace=frontend"
+  },
+  "license": "MIT"
+}

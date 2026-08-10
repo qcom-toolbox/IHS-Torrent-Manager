@@ -1,0 +1,40 @@
+# Template unit file -- install.sh substitutes __DATA_DIR__, __DOWNLOAD_DIR__
+# and __SERVICE_USER__, then writes the result to
+# /etc/systemd/system/qbittorrent-nox.service.
+#
+# The WebUI is bound to 127.0.0.1 via qBittorrent.conf (WebUI\Address),
+# written by install.sh before the first start -- it is never reachable
+# from outside the host, only from the app/worker over localhost.
+[Unit]
+Description=qBittorrent-nox (torrent backend for Torrent Manager)
+Documentation=https://github.com/qbittorrent/qBittorrent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+UMask=0027
+ExecStart=/usr/bin/qbittorrent-nox --profile=__DATA_DIR__/qbittorrent
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__DATA_DIR__ __DOWNLOAD_DIR__
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qbittorrent-nox
+
+[Install]
+WantedBy=multi-user.target

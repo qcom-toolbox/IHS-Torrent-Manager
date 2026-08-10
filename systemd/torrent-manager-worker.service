@@ -1,0 +1,40 @@
+# Template unit file -- install.sh substitutes __APP_DIR__, __DATA_DIR__,
+# __CONFIG_DIR__ and __SERVICE_USER__ for the paths/user chosen during
+# installation, then writes the result to
+# /etc/systemd/system/torrent-manager-worker.service.
+[Unit]
+Description=Torrent Manager - Background Sync Worker
+Documentation=https://github.com/qcom-toolbox/torrent-manager
+After=network-online.target qbittorrent-nox.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__CONFIG_DIR__/worker.env
+ExecStart=/usr/bin/node __APP_DIR__/worker/dist/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__DATA_DIR__
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=torrent-manager-worker
+
+[Install]
+WantedBy=multi-user.target

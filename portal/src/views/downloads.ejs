@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Completed Downloads</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-bar">
+      <h1 style="margin:0;">Completed Downloads</h1>
+      <form method="POST" action="/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="logout" style="all:unset;cursor:pointer;color:var(--muted);font-size:0.85rem;">Sign out</button>
+      </form>
+    </div>
+    <div class="card">
+      <% if (torrents.length === 0) { %>
+        <div class="empty">No completed downloads yet.</div>
+      <% } else { %>
+        <ul class="list">
+          <% torrents.forEach(function(t) { %>
+            <li class="item">
+              <div>
+                <div class="name"><%= t.name %></div>
+                <div class="meta"><%= t.sizeFormatted %> &middot; Completed: <%= t.completedAtFormatted %></div>
+              </div>
+              <a class="dl-btn" href="/download/<%= t.id %>">Download</a>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

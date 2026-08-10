@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Downloads</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="card login-card">
+      <h1>Downloads</h1>
+      <% if (error) { %>
+        <div class="error"><%= error %></div>
+      <% } %>
+      <form method="POST" action="/login">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autofocus required>
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

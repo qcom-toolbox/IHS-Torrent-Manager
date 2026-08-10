@@ -1,0 +1,24 @@
+{
+  "name": "@torrent-manager/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "argon2": "^0.41.1",
+    "axios": "^1.7.7",
+    "form-data": "^4.0.0",
+    "express-session": "^1.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^20.14.15",
+    "typescript": "^5.5.4"
+  }
+}
