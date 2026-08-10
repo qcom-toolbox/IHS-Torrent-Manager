@@ -23,6 +23,9 @@ export default function Settings() {
   const [savingBandwidth, setSavingBandwidth] = useState(false);
   const [bandwidthError, setBandwidthError] = useState<string | null>(null);
 
+  const [transferPolicy, setTransferPolicy] = useState<{ downloadsEnabled: boolean; uploadsEnabled: boolean } | null>(null);
+  const [savingTransferPolicy, setSavingTransferPolicy] = useState(false);
+
   useEffect(() => {
     if (user?.isAdmin) {
       api.get<{ settings: Record<string, string> }>('/admin/settings').then((res) => {
@@ -41,6 +44,10 @@ export default function Settings() {
           });
         })
         .catch((err) => setBandwidthError(err instanceof ApiError ? err.message : 'Unable to load bandwidth limits'));
+      api
+        .get<{ downloadsEnabled: boolean; uploadsEnabled: boolean }>('/admin/transfer-policy')
+        .then(setTransferPolicy)
+        .catch(() => {});
     }
   }, [user?.isAdmin]);
 
@@ -86,6 +93,27 @@ export default function Settings() {
       notify(err instanceof ApiError ? err.message : 'Failed to update bandwidth limits', 'error');
     } finally {
       setSavingBandwidth(false);
+    }
+  }
+
+  async function handleTransferPolicyToggle(key: 'downloadsEnabled' | 'uploadsEnabled', value: boolean) {
+    if (!transferPolicy) return;
+    setSavingTransferPolicy(true);
+    try {
+      const updated = await api.put<{ downloadsEnabled: boolean; uploadsEnabled: boolean }>('/admin/transfer-policy', {
+        [key]: value,
+      });
+      setTransferPolicy(updated);
+      notify(
+        key === 'downloadsEnabled'
+          ? `Downloading ${value ? 'enabled' : 'disabled'}`
+          : `Uploading/seeding ${value ? 'enabled' : 'disabled'}`,
+        'success'
+      );
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Failed to update transfer policy', 'error');
+    } finally {
+      setSavingTransferPolicy(false);
     }
   }
 
@@ -149,6 +177,43 @@ export default function Settings() {
               <button type="submit" disabled={savingThresholds} className="btn mt-2">Save thresholds</button>
             </form>
           </div>
+
+          {transferPolicy && (
+            <div className="card max-w-lg">
+              <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">Downloading &amp; uploading</h2>
+              <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+                Master switches, separate from the speed limits below. Turning one off immediately pauses every
+                matching torrent and blocks new uploads/resumes until it's turned back on; it does not automatically
+                resume torrents a user paused themselves.
+              </p>
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center justify-between gap-4 rounded-md border border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Downloading</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Allow torrents to download new data</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={transferPolicy.downloadsEnabled}
+                    disabled={savingTransferPolicy}
+                    onChange={(e) => handleTransferPolicyToggle('downloadsEnabled', e.target.checked)}
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-md border border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Uploading / seeding</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Allow completed torrents to upload to others</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={transferPolicy.uploadsEnabled}
+                    disabled={savingTransferPolicy}
+                    onChange={(e) => handleTransferPolicyToggle('uploadsEnabled', e.target.checked)}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="card max-w-lg">
             <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100">Bandwidth limits</h2>

@@ -1,5 +1,14 @@
 import { Router } from 'express';
-import { Users, Torrents, Settings, AuditLog, hashPassword, isPasswordStrongEnough } from '@ihs-torrent-manager/shared';
+import {
+  Users,
+  Torrents,
+  Settings,
+  AuditLog,
+  hashPassword,
+  isPasswordStrongEnough,
+  TRANSFER_POLICY_KEYS,
+  getTransferPolicy,
+} from '@ihs-torrent-manager/shared';
 import { requireAuth, requireAdmin, AuthedRequest } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
 import { qbt } from '../services/qbt';
@@ -114,6 +123,73 @@ router.put('/bandwidth', requireCsrf, async (req: AuthedRequest, res) => {
     req.ip
   );
   res.json({ ok: true, downloadLimit: dl, uploadLimit: ul });
+});
+
+// Master on/off switches for downloading and uploading/seeding, distinct
+// from the rate limits above (0 there means "unlimited", so it can't
+// double as "off"). Turning a switch off immediately pauses every
+// matching torrent right now; the worker (see worker/src/index.ts) keeps
+// enforcing it afterward (re-pausing anything that would otherwise start
+// downloading/seeding), and the upload and resume routes refuse to start
+// anything new while disabled. Turning a switch back on only lifts the
+// block -- it does not auto-resume torrents a user paused themselves.
+router.get('/transfer-policy', (_req, res) => {
+  res.json(getTransferPolicy());
+});
+
+router.put('/transfer-policy', requireCsrf, async (req: AuthedRequest, res) => {
+  const { downloadsEnabled, uploadsEnabled } = req.body ?? {};
+  if (downloadsEnabled === undefined && uploadsEnabled === undefined) {
+    res.status(400).json({ error: 'Provide downloadsEnabled and/or uploadsEnabled (boolean)' });
+    return;
+  }
+  if (downloadsEnabled !== undefined && typeof downloadsEnabled !== 'boolean') {
+    res.status(400).json({ error: 'downloadsEnabled must be a boolean' });
+    return;
+  }
+  if (uploadsEnabled !== undefined && typeof uploadsEnabled !== 'boolean') {
+    res.status(400).json({ error: 'uploadsEnabled must be a boolean' });
+    return;
+  }
+
+  const hashesToPause: string[] = [];
+
+  if (downloadsEnabled === false) {
+    Settings.set(TRANSFER_POLICY_KEYS.downloadsEnabled, 'false');
+    for (const t of Torrents.all()) {
+      if (t.status === 'downloading' || t.status === 'queued') hashesToPause.push(t.torrent_hash);
+    }
+  } else if (downloadsEnabled === true) {
+    Settings.set(TRANSFER_POLICY_KEYS.downloadsEnabled, 'true');
+  }
+
+  if (uploadsEnabled === false) {
+    Settings.set(TRANSFER_POLICY_KEYS.uploadsEnabled, 'false');
+    for (const t of Torrents.all()) {
+      if (t.status === 'completed') hashesToPause.push(t.torrent_hash);
+    }
+  } else if (uploadsEnabled === true) {
+    Settings.set(TRANSFER_POLICY_KEYS.uploadsEnabled, 'true');
+  }
+
+  if (hashesToPause.length > 0) {
+    try {
+      await qbt.pause(hashesToPause);
+    } catch {
+      res.status(502).json({ error: 'Updated the policy, but failed to pause matching torrents on qBittorrent' });
+      return;
+    }
+  }
+
+  AuditLog.record(
+    req.currentUser!.id,
+    'transfer_policy_update',
+    'settings',
+    undefined,
+    { downloadsEnabled, uploadsEnabled },
+    req.ip
+  );
+  res.json(getTransferPolicy());
 });
 
 export default router;

@@ -123,3 +123,27 @@ doesn't implement any throttling itself, and the limits are global (all
 torrents combined), not per-torrent or per-user. Changes take effect
 immediately, no restart needed.
 
+## Disabling downloading / uploading entirely
+
+Settings → **Downloading & uploading** (admin only) has two independent
+master switches, separate from the speed limits above (0 there means
+"unlimited", so it can't double as "off"). Turning **Downloading** off:
+
+- immediately pauses every torrent that's currently downloading;
+- blocks new `.torrent` uploads (`403`) until turned back on;
+- blocks resuming any not-yet-completed torrent (`403`);
+- does **not** touch already-completed torrents — they keep seeding.
+
+Turning **Uploading/seeding** off does the mirror image: immediately
+pauses every completed torrent that's actively seeding, and blocks
+resuming a completed torrent, while leaving in-progress downloads
+untouched (they can finish downloading; they just won't start seeding
+once they do). The background worker re-enforces both switches every
+sync cycle (not just at the moment you flip them), so a torrent that
+finishes downloading while uploads are disabled gets paused automatically
+rather than briefly seeding first.
+
+Turning a switch back on only lifts the block going forward — it does
+**not** automatically resume torrents a user paused themselves (before or
+during the block); they resume those individually as normal.
+

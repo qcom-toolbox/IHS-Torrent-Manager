@@ -7,6 +7,10 @@ import {
   TorrentEvents,
   QbittorrentClient,
   mapQbtState,
+  isActivelyUploading,
+  isActivelyDownloading,
+  isDownloadsEnabled,
+  isUploadsEnabled,
 } from '@ihs-torrent-manager/shared';
 
 const shared = loadSharedConfig();
@@ -27,10 +31,27 @@ async function syncOnce(): Promise<void> {
   const byHash = new Map(qbtTorrents.map((t) => [t.hash.toLowerCase(), t]));
   const presentHashes: string[] = [];
 
+  // Continuously enforce the admin's transfer-policy switches (see
+  // app/src/routes/admin.ts): toggling a switch off pauses matching
+  // torrents once immediately from the API route, but this catches
+  // anything that starts/resumes afterward (race conditions, a torrent
+  // finishing and starting to seed, etc.) every sync cycle rather than
+  // only at the moment the switch was flipped.
+  const downloadsEnabled = isDownloadsEnabled();
+  const uploadsEnabled = isUploadsEnabled();
+  const hashesToPause: string[] = [];
+
   for (const local of dbTorrents) {
     const remote = byHash.get(local.torrent_hash.toLowerCase());
     if (!remote) continue;
     presentHashes.push(local.torrent_hash);
+
+    if (!downloadsEnabled && isActivelyDownloading(remote.state)) {
+      hashesToPause.push(remote.hash);
+    }
+    if (!uploadsEnabled && isActivelyUploading(remote.state)) {
+      hashesToPause.push(remote.hash);
+    }
 
     const newStatus = mapQbtState(remote.state);
     const wasCompleted = local.status === 'completed';
@@ -54,6 +75,14 @@ async function syncOnce(): Promise<void> {
       TorrentEvents.add(local.id, 'completed', 'Download finished');
     } else if (newStatus === 'error' && local.status !== 'error') {
       TorrentEvents.add(local.id, 'error', 'qBittorrent reported an error');
+    }
+  }
+
+  if (hashesToPause.length > 0) {
+    try {
+      await qbt.pause(hashesToPause);
+    } catch (err: any) {
+      console.error('[worker] failed to enforce transfer policy (pause):', err.message);
     }
   }
 

@@ -10,3 +10,4 @@ export * from './qbittorrent/client';
 export * from './sessionStore';
 export * from './notice';
 export * from './downloadTokens';
+export * from './transferPolicy';

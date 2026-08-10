@@ -12,6 +12,8 @@ import {
   canStartNewDownload,
   isSafeCategory,
   sanitizeFilename,
+  isDownloadsEnabled,
+  isUploadsEnabled,
 } from '@ihs-torrent-manager/shared';
 import { AuthedRequest, requireAuth } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
@@ -113,6 +115,10 @@ router.get('/disk', async (_req: AuthedRequest, res) => {
 });
 
 router.post('/upload', uploadLimiter, requireCsrf, upload.single('torrent'), async (req: AuthedRequest, res) => {
+  if (!isDownloadsEnabled()) {
+    res.status(403).json({ error: 'Downloads are currently disabled by the administrator' });
+    return;
+  }
   if (!req.file) {
     res.status(400).json({ error: 'No .torrent file uploaded' });
     return;
@@ -208,6 +214,17 @@ async function doAction(
   if (action === 'recheck' && !req.currentUser!.isAdmin) {
     res.status(403).json({ error: 'Only administrators can force a recheck' });
     return;
+  }
+  if (action === 'resume') {
+    const wouldSeed = torrent.status === 'completed';
+    if (wouldSeed && !isUploadsEnabled()) {
+      res.status(403).json({ error: 'Uploading/seeding is currently disabled by the administrator' });
+      return;
+    }
+    if (!wouldSeed && !isDownloadsEnabled()) {
+      res.status(403).json({ error: 'Downloads are currently disabled by the administrator' });
+      return;
+    }
   }
   try {
     await qbt[action]([torrent.torrent_hash]);

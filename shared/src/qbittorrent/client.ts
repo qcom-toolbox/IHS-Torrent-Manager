@@ -49,6 +49,21 @@ export function mapQbtState(state: string): string {
   return 'queued';
 }
 
+// mapQbtState() collapses both "completed and actively seeding" and
+// "completed but already paused" into our single 'completed' status (the
+// UI doesn't need the distinction), which means that status alone can't
+// tell the uploads-disabled enforcement whether a given torrent still
+// needs pausing. This checks the raw qBittorrent state instead.
+const QBT_ACTIVELY_UPLOADING_STATES = new Set(['uploading', 'stalledUP', 'queuedUP', 'checkingUP', 'forcedUP']);
+export function isActivelyUploading(state: string): boolean {
+  return QBT_ACTIVELY_UPLOADING_STATES.has(state);
+}
+
+/** True for any state mapQbtState() would classify as 'downloading' or 'queued'/'allocating'/'moving' -- i.e. anything the downloads-disabled policy should pause. */
+export function isActivelyDownloading(state: string): boolean {
+  return QBT_DOWNLOADING_STATES.has(state) || state === 'moving';
+}
+
 export class QbtAuthError extends Error {}
 export class QbtApiError extends Error {}
 
