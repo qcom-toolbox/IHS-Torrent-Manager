@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { Users, AuditLog, LoginAttempts, verifyPassword, hashPassword, isPasswordStrongEnough, readNoticeText } from '@ihs-torrent-manager/shared';
 import { loginLimiter } from '../middleware/rateLimit';
 import { AuthedRequest, requireAuth } from '../middleware/auth';
-import { requireCsrf } from '../middleware/csrf';
+import { requireCsrf, generateCsrfToken } from '../middleware/csrf';
 import { shared } from '../config';
 
 const router = Router();
@@ -50,6 +50,11 @@ router.post('/login', loginLimiter, async (req, res) => {
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.isAdmin = !!user.is_admin;
+    // regenerate() replaces the whole session, including any csrfToken a
+    // pre-login request had already set -- issue a fresh one now so the
+    // login response itself carries a valid token, rather than leaving it
+    // undefined until some later request happens to trigger ensureCsrfToken.
+    req.session.csrfToken = generateCsrfToken();
     AuditLog.record(user.id, 'login_success', 'user', String(user.id), undefined, req.ip);
     req.session.save(() => {
       res.json({

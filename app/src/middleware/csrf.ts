@@ -3,9 +3,13 @@ import * as crypto from 'crypto';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+export function generateCsrfToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
 export function ensureCsrfToken(req: Request, _res: Response, next: NextFunction): void {
   if (req.session && !req.session.csrfToken) {
-    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    req.session.csrfToken = generateCsrfToken();
   }
   next();
 }

@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "npm run build --workspace=shared && npm run build --workspace=frontend && npm run build --workspace=app && npm run build --workspace=worker && npm run build --workspace=portal",
+    "test": "npm run test --workspace=app && npm run test --workspace=portal",
     "migrate": "node shared/dist/db/migrate.js",
     "dev:app": "npm run dev --workspace=app",
     "dev:worker": "npm run dev --workspace=worker",

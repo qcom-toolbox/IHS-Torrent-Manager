@@ -26,7 +26,10 @@
                 <div class="name"><%= t.name %></div>
                 <div class="meta"><%= t.sizeFormatted %> &middot; Completed: <%= t.completedAtFormatted %></div>
               </div>
-              <a class="dl-btn" href="/download/<%= t.id %>">Download</a>
+              <form method="POST" action="/create-download-link/<%= t.id %>">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="dl-btn">Download</button>
+              </form>
             </li>
           <% }); %>
         </ul>

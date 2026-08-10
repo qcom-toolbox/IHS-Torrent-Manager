@@ -22,6 +22,7 @@ place; copy it to `.env` and adjust as needed.
 | `DISK_WARNING_THRESHOLD_PERCENT_FREE` | `20` | Below this % free, the dashboard shows a warning |
 | `DISK_CRITICAL_THRESHOLD_PERCENT_FREE` | `10` | Below this % free, the dashboard shows critical |
 | `DISK_BLOCK_THRESHOLD_PERCENT_FREE` | `5` | Below this % free, new torrent uploads are rejected |
+| `DOWNLOAD_TOKEN_TTL_MINUTES` | `60` | How long a minted download link (`/api/dl/<token>` or `/dl/<token>`) stays redeemable. See [security.md](security.md#download-privacy) |
 
 Disk thresholds can also be changed at runtime from **Settings** in the
 management panel (admin only) — no restart required.

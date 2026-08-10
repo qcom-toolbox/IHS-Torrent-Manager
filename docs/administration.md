@@ -46,10 +46,12 @@ column) support:
   data against disk.
 - **Details** — click a torrent's name for progress, speed, ETA, category,
   info-hash, per-file list, and a recent-events log.
-- **Download** — available once a torrent is `completed`; single files
-  stream directly, multi-file torrents are zipped on the fly
-  (`archiver`), with every path re-validated against the configured
-  download directory before being read.
+- **Download** — available once a torrent is `completed`. Clicking it
+  mints a short-lived, opaque download link (never the real filename or
+  torrent id — see [security.md](security.md#download-privacy)), then
+  fetches it; single files stream directly, multi-file torrents are
+  zipped on the fly (`archiver`), with every path re-validated against the
+  configured download directory before being read.
 
 ## Uploading torrents
 
@@ -96,6 +98,11 @@ secret. It:
   all (see `portal.env` in [configuration.md](configuration.md)) — even a
   full compromise of the portal process can't reach qBittorrent's API.
 - Has no other routes: no file browser, no API, no config exposure.
+- The "Download" button doesn't link straight to a file: it POSTs to mint
+  a short-lived, opaque `/dl/<token>` link (portal-session required, CSRF
+  protected), then follows it. See [security.md](security.md#download-privacy)
+  for the full design and why the real filename never appears in a URL,
+  header, or log.
 
 ## Storage / disk space
 

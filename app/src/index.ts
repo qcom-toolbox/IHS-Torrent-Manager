@@ -9,10 +9,18 @@ import { ensureCsrfToken } from './middleware/csrf';
 import { apiLimiter } from './middleware/rateLimit';
 import authRoutes from './routes/auth';
 import torrentRoutes from './routes/torrents';
+import downloadRoutes from './routes/downloads';
 import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
+import { requireAuth } from './middleware/auth';
 
-function bootstrap() {
+/**
+ * Builds a fully configured Express app but never calls .listen(). Split
+ * out from bootstrap() so tests can mount a real instance on an ephemeral
+ * port against a temp database, instead of hitting the actual production
+ * bootstrap sequence.
+ */
+export function createApp(): express.Express {
   fs.mkdirSync(appConfig.uploadTmpDir, { recursive: true });
 
   const applied = runMigrations(shared.databasePath);
@@ -43,6 +51,11 @@ function bootstrap() {
           frameAncestors: ["'none'"],
         },
       },
+      // Sent unconditionally (harmless over plain HTTP, enforced by
+      // browsers only once received over a real HTTPS connection) so that
+      // once this is deployed behind TLS -- which it always should be --
+      // browsers immediately start refusing to fall back to HTTP.
+      hsts: { maxAge: 15552000, includeSubDomains: true },
     })
   );
 
@@ -79,6 +92,10 @@ function bootstrap() {
   app.use('/api/torrents', torrentRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/admin', adminRoutes);
+  // Opaque token redemption -- deliberately its own top-level namespace
+  // (not nested under /api/torrents/:id/...) so the URL never carries a
+  // torrent id or any other identifying information, only the token.
+  app.use('/api/dl', requireAuth, downloadRoutes);
 
   // Serve the built React management panel as static assets, with an SPA
   // fallback so client-side routes (e.g. /users, /torrents/5) work on
@@ -105,9 +122,16 @@ function bootstrap() {
     res.status(500).json({ error: 'Internal server error' });
   });
 
+  return app;
+}
+
+function bootstrap(): void {
+  const app = createApp();
   app.listen(appConfig.port, appConfig.host, () => {
     console.log(`IHS Torrent Manager panel listening on http://${appConfig.host}:${appConfig.port}`);
   });
 }
 
-bootstrap();
+if (require.main === module) {
+  bootstrap();
+}

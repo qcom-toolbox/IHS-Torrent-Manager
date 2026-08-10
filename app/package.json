@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@ihs-torrent-manager/shared": "1.0.0",

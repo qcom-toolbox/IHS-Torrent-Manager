@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
 import archiver from 'archiver';
@@ -12,11 +12,13 @@ import {
   Torrents,
   Settings,
   LoginAttempts,
+  AuditLog,
   verifyPassword,
   SqliteSessionStore,
   resolveContentRoot,
   listFilesRecursively,
-  sanitizeFilename,
+  genericDownloadFilename,
+  DownloadTokens,
   readNoticeText,
 } from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
@@ -61,7 +63,29 @@ function checkCsrf(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-function bootstrap(): void {
+/**
+ * Loads the on-disk file list for a completed torrent, purely from the
+ * download directory + display name (no qBittorrent access -- see
+ * shared/src/services/torrentFiles.ts). Returns null on any failure
+ * (missing torrent, not completed, nothing on disk) so callers can
+ * respond with a single generic "not found" regardless of which case hit.
+ */
+function loadCompletedTorrentFiles(torrentId: number) {
+  const torrent = Torrents.findById(torrentId);
+  if (!torrent || torrent.status !== 'completed') return null;
+  try {
+    const root = resolveContentRoot(shared.torrentDownloadDir, torrent.display_name);
+    if (!fs.existsSync(root)) return null;
+    const files = listFilesRecursively(shared.torrentDownloadDir, root);
+    if (files.length === 0) return null;
+    return { torrent, files };
+  } catch {
+    return null;
+  }
+}
+
+/** Builds a fully configured Express app but never calls .listen(). */
+export function createApp(): Express {
   runMigrations(shared.databasePath);
 
   const app = express();
@@ -83,6 +107,7 @@ function bootstrap(): void {
           frameAncestors: ["'none'"],
         },
       },
+      hsts: { maxAge: 15552000, includeSubDomains: true },
     })
   );
   app.use(express.urlencoded({ extended: false, limit: '16kb' }));
@@ -115,6 +140,16 @@ function bootstrap(): void {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Deliberately tight: redeeming download links has no legitimate reason
+  // to happen at high frequency, so this doubles as brute-force/enumeration
+  // protection on top of the tokens' 256 bits of entropy.
+  const downloadLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 30,
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -182,48 +217,53 @@ function bootstrap(): void {
     res.render('downloads', { torrents: completed, csrfToken: req.session!.csrfToken });
   });
 
-  app.get('/download/:id', requirePortalAuth, (req, res) => {
+  // Step 1: mint an opaque, short-lived token for a specific completed
+  // torrent. Requires an active portal session (the "authenticated route
+  // that verifies permissions" this whole design is built around) and a
+  // valid CSRF token, exactly like every other state-changing portal route.
+  app.post('/create-download-link/:id', requirePortalAuth, checkCsrf, (req, res) => {
     const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id)) {
+    if (!Number.isInteger(id) || !loadCompletedTorrentFiles(id)) {
       res.status(404).send('Not found');
       return;
     }
-    const torrent = Torrents.findById(id);
-    if (!torrent || torrent.status !== 'completed') {
-      res.status(404).send('Not found');
-      return;
-    }
+    const { raw } = DownloadTokens.issue(id, 'portal', null, shared.downloadTokenTtlMs);
+    AuditLog.record(null, 'portal_download_link_created', 'torrent', String(id), undefined, req.ip);
+    res.redirect(`/dl/${raw}`);
+  });
 
-    let files;
-    try {
-      const root = resolveContentRoot(shared.torrentDownloadDir, torrent.display_name);
-      if (!fs.existsSync(root)) {
-        res.status(404).send('File not found on disk');
-        return;
-      }
-      files = listFilesRecursively(shared.torrentDownloadDir, root);
-    } catch {
+  // Step 2: redeem the token. The URL contains nothing but the token --
+  // no torrent id, no filename, no extension hints beyond what's strictly
+  // needed for the browser to save the file usably.
+  app.get('/dl/:token', requirePortalAuth, downloadLimiter, (req, res) => {
+    const redeemed = DownloadTokens.redeem(req.params.token);
+    // Same response whether the token is unknown, expired, or (below)
+    // the torrent it pointed to is no longer downloadable -- redemption
+    // failures never reveal which case occurred.
+    if (!redeemed) {
       res.status(404).send('Not found');
       return;
     }
-
-    if (files.length === 0) {
-      res.status(404).send('No files available');
+    const loaded = loadCompletedTorrentFiles(redeemed.torrentId);
+    if (!loaded) {
+      res.status(404).send('Not found');
       return;
     }
+    const { torrent, files } = loaded;
+
+    AuditLog.record(null, 'portal_download', 'torrent', String(torrent.id), undefined, req.ip);
 
     if (files.length === 1) {
       const f = files[0];
-      res.download(f.absPath, sanitizeFilename(path.basename(f.relName)));
+      res.download(f.absPath, genericDownloadFilename(f.relName, 'file'));
       return;
     }
 
-    const zipName = sanitizeFilename(`${torrent.display_name}.zip`);
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${genericDownloadFilename('', 'archive')}"`);
     const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', (err) => {
-      res.status(500).end(`Archive error: ${err.message}`);
+    archive.on('error', () => {
+      res.status(500).end('Archive error');
     });
     archive.pipe(res);
     for (const f of files) {
@@ -238,14 +278,20 @@ function bootstrap(): void {
     res.status(404).send('Not found');
   });
 
+  return app;
+}
+
+function bootstrap(): void {
+  const app = createApp();
   app.listen(portalConfig.port, portalConfig.host, () => {
     console.log(`Download portal listening on http://${portalConfig.host}:${portalConfig.port}`);
   });
 }
 
-process.on('SIGTERM', () => {
-  getDb().close();
-  process.exit(0);
-});
-
-bootstrap();
+if (require.main === module) {
+  process.on('SIGTERM', () => {
+    getDb().close();
+    process.exit(0);
+  });
+  bootstrap();
+}

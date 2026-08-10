@@ -37,9 +37,17 @@ export function useTorrentActions(onChanged: () => void) {
     });
   }, [onChanged]);
 
-  const onDownload = useCallback((t: Torrent) => {
-    window.location.href = `/api/torrents/${t.id}/download`;
-  }, []);
+  const onDownload = useCallback(async (t: Torrent) => {
+    // Two-step flow: mint a short-lived, opaque token via the authenticated
+    // API (never exposes the real filename or the torrent's numeric id),
+    // then navigate to that one-purpose link to actually fetch the bytes.
+    try {
+      const res = await api.post<{ url: string }>(`/torrents/${t.id}/download-link`);
+      window.location.href = res.url;
+    } catch (err: any) {
+      notify(err.message ?? 'Unable to start download', 'error');
+    }
+  }, [notify]);
 
   return {
     actions: { onPause, onResume, onStop, onDelete, onDeleteWithData, onRecheck, onDownload },

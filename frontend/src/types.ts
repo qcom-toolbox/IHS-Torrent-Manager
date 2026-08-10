@@ -12,7 +12,6 @@ export interface Torrent {
   hash: string;
   userId: number;
   owner?: string;
-  originalFilename: string;
   name: string;
   status: TorrentStatus;
   progress: number;

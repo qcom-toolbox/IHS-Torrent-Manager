@@ -63,11 +63,101 @@ hidden form field (`portal/src/index.ts`).
     download directory can't be used to read or write outside it.
   - Is used identically by the management panel's download endpoint and
     the (independent) download portal implementation.
-- Filenames are sanitized to a safe basename charset before being used in
-  `Content-Disposition` headers or passed to qBittorrent
-  (`sanitizeFilename`).
+- Uploaded filenames are sanitized to a safe basename charset before being
+  passed to qBittorrent (`sanitizeFilename`). Downloaded filenames sent
+  back to the browser go through a *different*, deliberately generic
+  function -- see "Download privacy" below.
 - Upload size is capped (`MAX_UPLOAD_SIZE_BYTES`), and only one file per
   request is accepted.
+
+## Download privacy
+
+Every download -- from the management panel or the portal -- goes through
+the same two-step, opaque-token design (`shared/src/downloadTokens.ts`):
+
+1. **Mint** (`POST /api/torrents/:id/download-link` on the panel,
+   `POST /create-download-link/:id` on the portal): the caller must already
+   be authenticated and, on the panel, must own the torrent (or be an
+   admin). Only after that check passes is a token generated:
+   `crypto.randomBytes(32)` (256 bits), stored **hashed** (`SHA-256`) in a
+   new `download_tokens` table -- exactly like a password, the raw token
+   exists nowhere at rest, only in the URL handed to the client. It expires
+   after `DOWNLOAD_TOKEN_TTL_MINUTES` (default 60).
+2. **Redeem** (`GET /api/dl/:token` / `GET /dl/:token`): the URL contains
+   *only* the token -- no torrent id, no filename, no extension hint. This
+   route is itself still behind the same session-auth middleware as
+   everything else, and on the panel it re-checks ownership against the
+   token's resolved torrent. **A leaked link alone is not sufficient to
+   download the file** -- the redeemer also needs a live session belonging
+   to the original owner (or an admin). Every failure mode (unknown token,
+   expired token, wrong owner, torrent no longer completed) returns the
+   identical generic 404, so a redemption attempt can't be used to
+   fingerprint *why* it failed.
+
+What this gets you, mapped to concrete properties:
+
+| Requirement | How it's met |
+|---|---|
+| No real filename in the URL | URL is `/api/dl/<token>` or `/dl/<token>`, nothing else |
+| Opaque/random identifiers | 256-bit `crypto.randomBytes`, base64url-encoded |
+| No filename in query params either | there are no query params at all |
+| Private storage, not directly reachable | `TORRENT_DOWNLOAD_DIR` is never served statically; see Network exposure |
+| Authenticated route verifying permissions | ownership/admin check at mint time *and* session check at redeem time |
+| Links are temporary | `expires_at`, checked on every redemption |
+| Links are hard to guess | 256 bits of entropy -- brute force is not a practical concern |
+| Enumeration protection | tight rate limiting (30/min) on the redemption route, on top of the entropy above |
+| Generic `Content-Disposition` | `genericDownloadFilename()` (`shared/src/security/paths.ts`) returns `download<ext>` for a single file or `download.zip` for an archive -- the descriptive/semantic part of the name never reaches a response header |
+| Original names not returned unnecessarily | `originalFilename` (the uploaded `.torrent`'s filename) was removed from every JSON API response -- it was never used by the UI to begin with. `display_name` (the torrent's real name) *is* still returned from `GET /api/torrents` etc., because the authenticated dashboard genuinely needs to show it -- hiding it there would break the product, not improve privacy |
+| Files reachable only via the platform | there is no other route that serves anything from `TORRENT_DOWNLOAD_DIR`; both redemption handlers resolve paths through `safeResolve`/`resolveContentRoot`, confined to that directory |
+
+Two design choices worth calling out explicitly:
+
+- **Why require a session on redemption at all, instead of a pure bearer
+  token (like an S3 presigned URL)?** Because this is a private,
+  self-hosted tool where users are expected to stay logged in while
+  downloading, and requiring both the token *and* a valid session for the
+  right user is strictly stronger: a link that leaks into a chat log, a
+  proxy's access log, or shoulder-surfed browser history is useless to
+  whoever finds it unless they *also* have a valid session for that
+  specific account. The tradeoff is that a token can't be handed to a
+  download manager or `wget` without also exporting the session cookie --
+  an acceptable cost for a private tool prioritizing confidentiality.
+- **Why not single-use tokens?** Large torrents can take a long time to
+  download, and browsers/download managers sometimes issue multiple
+  `Range` requests for the same URL (parallel-chunk downloading, resuming
+  after a pause). A hard single-use limit would break those legitimate
+  cases. Time-based expiry plus rate limiting was judged the better
+  tradeoff; `download_tokens.use_count` is still tracked for observability.
+
+### What's inside a downloaded archive is out of scope
+
+Multi-file torrents are still zipped with their real internal file/folder
+names (`archiver.file(f.absPath, { name: f.relName })`). This is
+intentional: those names are the actual content the authorized downloader
+requested and needs to make sense of what they received. The privacy
+guarantees above are about the transport layer -- URLs, headers, logs,
+anything a party *other than* the authorized downloader could observe --
+not about hiding a file's contents from the person who legitimately
+downloaded it.
+
+### Logs
+
+- Neither the panel nor the portal runs a request-URL access logger
+  (no `morgan` or equivalent) -- there is nothing at the application level
+  that could echo a download URL into a log file. Operational history
+  instead goes through `audit_log` (`torrent_download`,
+  `torrent_download_link_created`, `portal_download`,
+  `portal_download_link_created`), which records the acting user (or
+  `NULL` for the portal, which has no per-user identity) and the torrent's
+  numeric ID -- never a filename.
+- If you put this behind Nginx/Caddy, their default access-log format logs
+  the full request path. Since that path is now always an opaque token (or
+  a login/API path with no filename in it), there is nothing left for a
+  reverse-proxy log to leak -- this was true by construction once the URL
+  redesign above landed, not something that needed separate log
+  configuration.
+- Error responses on the download path never include `err.message` --
+  redemption failures return a single fixed string regardless of cause.
 
 ## SQL injection
 
@@ -101,6 +191,27 @@ scripts, no framing).
 - `.env`, real config files, and any secrets are excluded via `.gitignore`
   and were never committed; `.env.example` documents variable names only.
 
+## Transport security (HTTPS)
+
+- Both the panel and the portal send `Strict-Transport-Security` (via
+  `helmet`'s `hsts` option, `max-age=180 days`, `includeSubDomains`)
+  unconditionally. The header is harmless over plain HTTP -- browsers only
+  act on it once they've received it over a real HTTPS connection -- so
+  sending it always means HTTPS gets enforced from the very first secure
+  visit, with no extra configuration step.
+- `COOKIE_SECURE=true` (set this once you're behind HTTPS, see
+  [configuration.md](configuration.md)) marks session cookies `Secure`, so
+  they're never sent over a plaintext connection even if one is somehow
+  reachable.
+- The installer's optional nginx/Caddy integration exists specifically to
+  get you onto HTTPS with a real certificate (Caddy does this
+  automatically; nginx needs a separate `certbot --nginx` run, called out
+  in the installer's output). Running this application without a reverse
+  proxy in front of it, directly over plain HTTP on the open Internet, is
+  not a supported configuration -- the opaque-token download design above
+  raises the bar for a passive network observer, but it does not replace
+  transport encryption for session cookies and credentials.
+
 ## Network exposure
 
 - qBittorrent's WebUI is bound to `127.0.0.1` (`WebUI\Address` in
@@ -122,6 +233,34 @@ scripts, no framing).
   `ReadOnlyPaths` allowlist. The download portal's unit in particular gets
   `ReadOnlyPaths` for the torrent directory — it has no legitimate reason
   to write there. See `systemd/*.service`.
+
+## Automated tests
+
+`app/test/download-privacy.test.js` and `portal/test/download-privacy.test.js`
+(run with `npm test`, Node's built-in test runner, no extra dependencies)
+boot a real instance of each app on an ephemeral port against a throwaway
+database and real files on disk with deliberately sensitive names, then
+drive it over real HTTP. They assert, among other things:
+
+- an unauthenticated request can't mint a link, can't redeem one, and gets
+  redirected/rejected before ever seeing torrent data;
+- a non-owner (panel) can't mint a link for someone else's torrent;
+- a valid, unexpired token is still refused if presented without the
+  right session (a leaked link alone isn't enough);
+- minted URLs match `/api/dl/<token>` or `/dl/<token>` exactly, with
+  nothing else in the path;
+- `Content-Disposition` never contains the real name, only `download<ext>`
+  or `download.zip`;
+- guessed and expired tokens both get the same generic 404;
+- `GET /api/torrents` never includes the unused `originalFilename` field;
+- repeated redemption attempts eventually hit the rate limiter.
+
+The panel's suite stubs qBittorrent with a minimal real HTTP server
+implementing just the two endpoints the app calls (login, torrent file
+listing) -- everything on this codebase's side of that boundary runs
+unmocked, including the actual `download_tokens` table, the actual
+`safeResolve`/`resolveContentRoot` path logic, and the actual Express
+routing/middleware stack.
 
 ## Known limitations
 

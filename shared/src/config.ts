@@ -35,6 +35,8 @@ export interface SharedConfig {
   diskBlockPercentFree: number;
   /** Optional path to a plain-text access-notice banner shown on both login pages. Unset/missing = no banner. */
   noticeFilePath: string | undefined;
+  /** How long a minted, opaque download link stays redeemable. */
+  downloadTokenTtlMs: number;
 }
 
 let cached: SharedConfig | null = null;
@@ -55,6 +57,7 @@ export function loadSharedConfig(): SharedConfig {
     diskCriticalPercentFree: intEnv('DISK_CRITICAL_THRESHOLD_PERCENT_FREE', 10),
     diskBlockPercentFree: intEnv('DISK_BLOCK_THRESHOLD_PERCENT_FREE', 5),
     noticeFilePath: process.env.NOTICE_FILE_PATH ? path.resolve(process.env.NOTICE_FILE_PATH) : undefined,
+    downloadTokenTtlMs: intEnv('DOWNLOAD_TOKEN_TTL_MINUTES', 60) * 60 * 1000,
   };
   return cached;
 }

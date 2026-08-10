@@ -1,18 +1,15 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import archiver from 'archiver';
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   Torrents,
   TorrentEvents,
   AuditLog,
   Settings,
   Users,
+  DownloadTokens,
   getDiskSpace,
   getDirectorySizeCached,
   canStartNewDownload,
-  resolveTorrentContentPaths,
   isSafeCategory,
   sanitizeFilename,
 } from '@ihs-torrent-manager/shared';
@@ -45,7 +42,10 @@ function serializeTorrent(t: ReturnType<typeof Torrents.findById>, ownerUsername
     hash: t.torrent_hash,
     userId: t.user_id,
     owner: ownerUsername,
-    originalFilename: t.original_filename,
+    // Deliberately no `originalFilename` here: the uploaded .torrent's
+    // filename isn't used anywhere in the UI, so it isn't sent over the
+    // wire. It still lives in the DB (torrents.original_filename) purely
+    // for admin/audit purposes.
     name: t.display_name,
     status: t.status,
     progress: t.progress,
@@ -243,56 +243,22 @@ router.delete('/:id', requireCsrf, async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
-router.get('/:id/download', async (req: AuthedRequest, res) => {
+// Step 1 of the two-step download flow: verify ownership + that the
+// torrent is actually completed, then mint a short-lived, unguessable
+// token. The actual file transfer happens at GET /api/dl/:token (see
+// routes/downloads.ts), which is deliberately its own top-level route so
+// the URL used to fetch bytes never contains a torrent id or filename.
+router.post('/:id/download-link', requireCsrf, (req: AuthedRequest, res) => {
   const torrent = loadOwnedTorrent(req, res);
   if (!torrent) return;
   if (torrent.status !== 'completed') {
     res.status(409).json({ error: 'Torrent has not finished downloading yet' });
     return;
   }
-  if (!torrent.save_path) {
-    res.status(500).json({ error: 'Torrent has no known save path' });
-    return;
-  }
 
-  try {
-    const qbtFiles = await qbt.getFiles(torrent.torrent_hash);
-    const resolved = resolveTorrentContentPaths(shared.torrentDownloadDir, torrent.save_path, qbtFiles);
-
-    if (resolved.length === 0) {
-      res.status(404).json({ error: 'No files found for this torrent' });
-      return;
-    }
-
-    AuditLog.record(req.currentUser!.id, 'torrent_download', 'torrent', String(torrent.id), undefined, req.ip);
-
-    if (resolved.length === 1) {
-      const f = resolved[0];
-      if (!fs.existsSync(f.absPath)) {
-        res.status(404).json({ error: 'File not found on disk' });
-        return;
-      }
-      res.download(f.absPath, sanitizeFilename(path.basename(f.relName)));
-      return;
-    }
-
-    const zipName = sanitizeFilename(`${torrent.display_name}.zip`);
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', (err) => {
-      res.status(500).end(`Archive error: ${err.message}`);
-    });
-    archive.pipe(res);
-    for (const f of resolved) {
-      if (fs.existsSync(f.absPath)) {
-        archive.file(f.absPath, { name: f.relName });
-      }
-    }
-    await archive.finalize();
-  } catch (err: any) {
-    res.status(500).json({ error: `Download failed: ${err.message}` });
-  }
+  const { raw } = DownloadTokens.issue(torrent.id, 'panel', req.currentUser!.id, shared.downloadTokenTtlMs);
+  AuditLog.record(req.currentUser!.id, 'torrent_download_link_created', 'torrent', String(torrent.id), undefined, req.ip);
+  res.json({ url: `/api/dl/${raw}` });
 });
 
 export default router;

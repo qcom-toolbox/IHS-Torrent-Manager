@@ -32,7 +32,15 @@ export function safeResolve(baseDir: string, ...untrustedSegments: string[]): st
 
   const joined = path.resolve(base, ...untrustedSegments.map((s) => s.replace(/\0/g, '')));
 
-  if (joined !== baseReal && !joined.startsWith(baseReal + path.sep)) {
+  // Compare against the literal (possibly-symlinked) `base`, not its
+  // resolved form: `joined` was computed by path.resolve()'ing against
+  // `base`, so that's the only consistent thing to compare it to here.
+  // Comparing against `baseReal` instead would false-positive whenever
+  // `baseDir` itself sits behind a symlink (e.g. a mounted-volume symlink
+  // in production, or /tmp on macOS) even for entirely legitimate paths.
+  // Symlink *escapes* are still caught below by comparing realpath(joined)
+  // against realpath(base).
+  if (joined !== base && !joined.startsWith(base + path.sep)) {
     throw new Error('Path escapes base directory');
   }
 
@@ -67,4 +75,18 @@ export function safeResolve(baseDir: string, ...untrustedSegments: string[]): st
 
 export function isSafeCategory(category: string): boolean {
   return /^[a-zA-Z0-9_\- ]{0,64}$/.test(category);
+}
+
+/**
+ * Content-Disposition filename that reveals as little as possible: a fixed
+ * generic base name, plus the original extension only (never the
+ * descriptive/semantic part of the name) so the OS/browser can still open
+ * the file correctly. Archives always get a flat ".zip" name since the
+ * archive format itself is already generic.
+ */
+export function genericDownloadFilename(realName: string, kind: 'file' | 'archive' = 'file'): string {
+  if (kind === 'archive') return 'download.zip';
+  const ext = path.extname(realName).toLowerCase();
+  const safeExt = /^\.[a-z0-9]{1,10}$/.test(ext) ? ext : '';
+  return `download${safeExt}`;
 }
