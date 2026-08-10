@@ -25,7 +25,7 @@ export function useTorrentActions(onChanged: () => void) {
 
   const onDelete = useCallback((t: Torrent) => {
     setConfirm({
-      options: { title: 'Delete torrent', message: `Remove "${t.name}" from Torrent Manager? Downloaded files will be kept.`, confirmLabel: 'Delete', danger: true },
+      options: { title: 'Delete torrent', message: `Remove "${t.name}" from IHS Torrent Manager? Downloaded files will be kept.`, confirmLabel: 'Delete', danger: true },
       run: () => run(api.del(`/torrents/${t.id}`), `Deleted "${t.name}"`),
     });
   }, [onChanged]);

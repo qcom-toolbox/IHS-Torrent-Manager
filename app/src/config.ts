@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { loadSharedConfig, loadQbtConfig } from '@torrent-manager/shared';
+import { loadSharedConfig, loadQbtConfig } from '@ihs-torrent-manager/shared';
 
 function requireEnv(name: string): string {
   const v = process.env[name];

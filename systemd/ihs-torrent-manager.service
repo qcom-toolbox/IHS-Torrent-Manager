@@ -1,13 +1,13 @@
 # Template unit file -- install.sh substitutes __APP_DIR__, __DATA_DIR__,
 # __DOWNLOAD_DIR__, __CONFIG_DIR__ and __SERVICE_USER__ for the paths/user
 # chosen during installation, then writes the result to
-# /etc/systemd/system/torrent-manager.service.
+# /etc/systemd/system/ihs-torrent-manager.service.
 [Unit]
-Description=Torrent Manager - Management Panel
-Documentation=https://github.com/qcom-toolbox/torrent-manager
+Description=IHS Torrent Manager - Management Panel
+Documentation=https://github.com/qcom-toolbox/IHS-Torrent-Manager
 After=network-online.target qbittorrent-nox.service
 Wants=network-online.target
-Requires=torrent-manager-worker.service
+Requires=ihs-torrent-manager-worker.service
 
 [Service]
 Type=simple
@@ -35,7 +35,7 @@ MemoryDenyWriteExecute=true
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=torrent-manager
+SyslogIdentifier=ihs-torrent-manager
 
 [Install]
 WantedBy=multi-user.target

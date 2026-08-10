@@ -6,7 +6,7 @@
 
 - The SQLite database (via SQLite's own online `.backup` command, safe to
   run while services are active — it doesn't require stopping anything).
-- `/etc/torrent-manager/` — environment files, generated secrets, and the
+- `/etc/ihs-torrent-manager/` — environment files, generated secrets, and the
   install-state file.
 
 It deliberately does **not** include the torrent download directory —
@@ -18,30 +18,30 @@ snapshot, `rsync`, etc.) if you need that too.
 ## Taking a backup
 
 ```bash
-sudo /opt/torrent-manager/scripts/backup.sh [output-directory]
-# defaults to /var/backups/torrent-manager
+sudo /opt/ihs-torrent-manager/scripts/backup.sh [output-directory]
+# defaults to /var/backups/ihs-torrent-manager
 ```
 
-Produces `torrent-manager-backup-<UTC timestamp>.tar.gz`, mode `600`.
+Produces `ihs-torrent-manager-backup-<UTC timestamp>.tar.gz`, mode `600`.
 
 ### Automating it
 
 ```bash
 sudo crontab -e
 # nightly at 03:00
-0 3 * * * /opt/torrent-manager/scripts/backup.sh /var/backups/torrent-manager
+0 3 * * * /opt/ihs-torrent-manager/scripts/backup.sh /var/backups/ihs-torrent-manager
 ```
 
 ## Restoring
 
 ```bash
-sudo /opt/torrent-manager/scripts/restore.sh /var/backups/torrent-manager/torrent-manager-backup-20260101-030000.tar.gz
+sudo /opt/ihs-torrent-manager/scripts/restore.sh /var/backups/ihs-torrent-manager/ihs-torrent-manager-backup-20260101-030000.tar.gz
 ```
 
-This stops the three Torrent Manager services, replaces the database and
-`/etc/torrent-manager/` contents with the backup's, fixes ownership, and
+This stops the three IHS Torrent Manager services, replaces the database and
+`/etc/ihs-torrent-manager/` contents with the backup's, fixes ownership, and
 restarts. It asks for confirmation before touching anything. qBittorrent's
-own state (in `/var/lib/torrent-manager/qbittorrent`) and torrent data are
+own state (in `/var/lib/ihs-torrent-manager/qbittorrent`) and torrent data are
 not part of this backup/restore flow — if you need those restored too,
 restore them from your own filesystem backup before running this script,
 since credentials in the restored `app.env`/`worker.env` need to match
@@ -57,5 +57,5 @@ whatever qBittorrent WebUI account actually exists.
    backup, if applicable.
 4. Run `scripts/restore.sh` with your latest backup archive to bring back
    the real database, users, and secrets.
-5. `sudo systemctl restart torrent-manager torrent-manager-worker torrent-manager-portal qbittorrent-nox`
+5. `sudo systemctl restart ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox`
    and check `scripts/healthcheck.sh`.

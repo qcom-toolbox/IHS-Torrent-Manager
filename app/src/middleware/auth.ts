@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { Users } from '@torrent-manager/shared';
+import { Users } from '@ihs-torrent-manager/shared';
 
 export interface AuthedRequest extends Request {
   currentUser?: { id: number; username: string; isAdmin: boolean };

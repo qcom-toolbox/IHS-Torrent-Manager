@@ -1,4 +1,4 @@
-import { loadSharedConfig } from '@torrent-manager/shared';
+import { loadSharedConfig } from '@ihs-torrent-manager/shared';
 
 function requireEnv(name: string): string {
   const v = process.env[name];

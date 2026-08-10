@@ -1,4 +1,4 @@
-import { QbittorrentClient } from '@torrent-manager/shared';
+import { QbittorrentClient } from '@ihs-torrent-manager/shared';
 import { qbtConfig } from '../config';
 
 export const qbt = new QbittorrentClient(

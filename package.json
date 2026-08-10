@@ -1,5 +1,5 @@
 {
-  "name": "torrent-manager",
+  "name": "ihs-torrent-manager",
   "private": true,
   "version": "1.0.0",
   "description": "Self-hosted torrent management platform (management panel + download portal)",

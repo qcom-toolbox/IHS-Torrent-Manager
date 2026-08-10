@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Users, AuditLog, hashPassword, isPasswordStrongEnough } from '@torrent-manager/shared';
+import { Users, AuditLog, hashPassword, isPasswordStrongEnough } from '@ihs-torrent-manager/shared';
 import { AuthedRequest, requireAuth, requireAdmin } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
 

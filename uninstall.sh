@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Torrent Manager - uninstaller
+# IHS Torrent Manager - uninstaller
 #
 #   sudo ./uninstall.sh
 #
@@ -11,10 +11,10 @@
 
 set -euo pipefail
 
-CONFIG_DIR="/etc/torrent-manager"
+CONFIG_DIR="/etc/ihs-torrent-manager"
 STATE_FILE="$CONFIG_DIR/install.conf"
-SERVICE_USER="torrent-manager"
-DATA_DIR="/var/lib/torrent-manager"
+SERVICE_USER="ihs-torrent-manager"
+DATA_DIR="/var/lib/ihs-torrent-manager"
 
 if [[ -t 1 ]]; then
   C_RESET='\033[0m'; C_BOLD='\033[1m'; C_RED='\033[31m'; C_GREEN='\033[32m'; C_YELLOW='\033[33m'; C_BLUE='\033[34m'
@@ -36,7 +36,7 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   die "This script must be run as root, e.g.: sudo ./uninstall.sh"
 fi
 
-APP_DIR="/opt/torrent-manager"
+APP_DIR="/opt/ihs-torrent-manager"
 DOWNLOAD_DIR="/srv/torrents"
 if [[ -f "$STATE_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -45,7 +45,7 @@ fi
 
 echo
 printf '%b\n' "${C_BOLD}========================================${C_RESET}"
-printf '%b\n' "${C_BOLD} Torrent Manager Uninstall${C_RESET}"
+printf '%b\n' "${C_BOLD} IHS Torrent Manager Uninstall${C_RESET}"
 printf '%b\n' "${C_BOLD}========================================${C_RESET}"
 echo
 echo "Each item below is removed independently and only with your explicit confirmation."
@@ -53,14 +53,14 @@ echo "Detected paths: app=$APP_DIR  data=$DATA_DIR  config=$CONFIG_DIR  download
 echo
 
 # 1. Stop and remove systemd services
-if confirm "Stop services and remove systemd unit files (torrent-manager, worker, portal)?"; then
-  systemctl stop torrent-manager torrent-manager-worker torrent-manager-portal 2>/dev/null || true
-  systemctl disable torrent-manager torrent-manager-worker torrent-manager-portal 2>/dev/null || true
-  rm -f /etc/systemd/system/torrent-manager.service \
-        /etc/systemd/system/torrent-manager-worker.service \
-        /etc/systemd/system/torrent-manager-portal.service
+if confirm "Stop services and remove systemd unit files (ihs-torrent-manager, worker, portal)?"; then
+  systemctl stop ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal 2>/dev/null || true
+  systemctl disable ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal 2>/dev/null || true
+  rm -f /etc/systemd/system/ihs-torrent-manager.service \
+        /etc/systemd/system/ihs-torrent-manager-worker.service \
+        /etc/systemd/system/ihs-torrent-manager-portal.service
   systemctl daemon-reload
-  ok "Torrent Manager systemd services removed"
+  ok "IHS Torrent Manager systemd services removed"
 else
   warn "Skipped: systemd services left in place"
 fi

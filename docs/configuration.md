@@ -1,14 +1,14 @@
 # Configuration
 
 All configuration is environment-based. In production the installer writes
-three separate files under `/etc/torrent-manager/` (mode `640`, owned by
-`root:torrent-manager`):
+three separate files under `/etc/ihs-torrent-manager/` (mode `640`, owned by
+`root:ihs-torrent-manager`):
 
 | File | Used by | Notable contents |
 |---|---|---|
-| `app.env` | `torrent-manager.service` | DB path, download dir, session secret, qBittorrent host/credentials |
-| `worker.env` | `torrent-manager-worker.service` | DB path, download dir, qBittorrent host/credentials, sync interval |
-| `portal.env` | `torrent-manager-portal.service` | DB path, download dir, portal session secret — **no qBittorrent credentials** |
+| `app.env` | `ihs-torrent-manager.service` | DB path, download dir, session secret, qBittorrent host/credentials |
+| `worker.env` | `ihs-torrent-manager-worker.service` | DB path, download dir, qBittorrent host/credentials, sync interval |
+| `portal.env` | `ihs-torrent-manager-portal.service` | DB path, download dir, portal session secret — **no qBittorrent credentials** |
 
 For local development, `.env.example` documents the same variables in one
 place; copy it to `.env` and adjust as needed.
@@ -30,7 +30,7 @@ management panel (admin only) — no restart required.
 |---|---|---|
 | `NOTICE_FILE_PATH` | unset | Path to a plain-text access-warning banner shown on **both** login pages. Unset, or a missing/empty file, simply means no banner. |
 
-The installer creates `/etc/torrent-manager/notice.txt` from
+The installer creates `/etc/ihs-torrent-manager/notice.txt` from
 [`config/notice.txt`](../config/notice.txt) on first install (substituting
 the organization name you provide), and points both `app.env` and
 `portal.env` at it. Edit that file anytime — no rebuild or restart

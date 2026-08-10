@@ -23,7 +23,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-60 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-6 px-2 text-lg font-bold text-slate-900 dark:text-white">Torrent Manager</div>
+        <div className="mb-6 px-2 text-lg font-bold text-slate-900 dark:text-white">IHS Torrent Manager</div>
         <nav className="flex flex-1 flex-col gap-1">
           <NavLink to="/" end className={navItemClass}>Dashboard</NavLink>
           <NavLink to="/torrents" className={navItemClass}>My Torrents</NavLink>

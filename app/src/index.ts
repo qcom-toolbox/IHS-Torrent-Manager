@@ -3,7 +3,7 @@ import session from 'express-session';
 import helmet from 'helmet';
 import * as fs from 'fs';
 import * as path from 'path';
-import { runMigrations, getDb, Users, SqliteSessionStore } from '@torrent-manager/shared';
+import { runMigrations, getDb, Users, SqliteSessionStore } from '@ihs-torrent-manager/shared';
 import { appConfig, shared } from './config';
 import { ensureCsrfToken } from './middleware/csrf';
 import { apiLimiter } from './middleware/rateLimit';
@@ -69,7 +69,7 @@ function bootstrap() {
   app.get('/api/health', (_req, res) => {
     try {
       getDb().prepare('SELECT 1').get();
-      res.json({ ok: true, service: 'torrent-manager-app' });
+      res.json({ ok: true, service: 'ihs-torrent-manager-app' });
     } catch {
       res.status(503).json({ ok: false });
     }
@@ -106,7 +106,7 @@ function bootstrap() {
   });
 
   app.listen(appConfig.port, appConfig.host, () => {
-    console.log(`Torrent Manager panel listening on http://${appConfig.host}:${appConfig.port}`);
+    console.log(`IHS Torrent Manager panel listening on http://${appConfig.host}:${appConfig.port}`);
   });
 }
 

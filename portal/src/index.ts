@@ -18,7 +18,7 @@ import {
   listFilesRecursively,
   sanitizeFilename,
   readNoticeText,
-} from '@torrent-manager/shared';
+} from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
 
 const MAX_RECENT_FAILURES = 10;
@@ -120,7 +120,7 @@ function bootstrap(): void {
   });
 
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, service: 'torrent-manager-portal' });
+    res.json({ ok: true, service: 'ihs-torrent-manager-portal' });
   });
 
   app.get('/login', (req, res) => {

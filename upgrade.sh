@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Torrent Manager - upgrade in place
+# IHS Torrent Manager - upgrade in place
 #
 #   sudo ./upgrade.sh
 #

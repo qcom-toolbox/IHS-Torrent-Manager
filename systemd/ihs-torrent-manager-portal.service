@@ -1,10 +1,10 @@
 # Template unit file -- install.sh substitutes __APP_DIR__, __DATA_DIR__,
 # __DOWNLOAD_DIR__, __CONFIG_DIR__ and __SERVICE_USER__ for the paths/user
 # chosen during installation, then writes the result to
-# /etc/systemd/system/torrent-manager-portal.service.
+# /etc/systemd/system/ihs-torrent-manager-portal.service.
 [Unit]
-Description=Torrent Manager - Download Portal
-Documentation=https://github.com/qcom-toolbox/torrent-manager
+Description=IHS Torrent Manager - Download Portal
+Documentation=https://github.com/qcom-toolbox/IHS-Torrent-Manager
 After=network-online.target
 Wants=network-online.target
 
@@ -37,7 +37,7 @@ MemoryDenyWriteExecute=true
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=torrent-manager-portal
+SyslogIdentifier=ihs-torrent-manager-portal
 
 [Install]
 WantedBy=multi-user.target

@@ -3,16 +3,16 @@
 ## First step: run the health check
 
 ```bash
-sudo /opt/torrent-manager/scripts/healthcheck.sh
+sudo /opt/ihs-torrent-manager/scripts/healthcheck.sh
 ```
 
 Or check everything manually:
 
 ```bash
-systemctl status torrent-manager torrent-manager-worker torrent-manager-portal qbittorrent-nox
-journalctl -u torrent-manager -n 100
-journalctl -u torrent-manager-worker -n 100
-journalctl -u torrent-manager-portal -n 100
+systemctl status ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox
+journalctl -u ihs-torrent-manager -n 100
+journalctl -u ihs-torrent-manager-worker -n 100
+journalctl -u ihs-torrent-manager-portal -n 100
 journalctl -u qbittorrent-nox -n 100
 ```
 
@@ -37,21 +37,21 @@ exact diagnostic commands to run. Common causes:
 ## Management panel won't start
 
 ```bash
-journalctl -u torrent-manager -n 100
+journalctl -u ihs-torrent-manager -n 100
 ```
 
-- `Missing required environment variable: ...` — `/etc/torrent-manager/app.env`
+- `Missing required environment variable: ...` — `/etc/ihs-torrent-manager/app.env`
   is incomplete or was hand-edited; compare against `.env.example`.
 - Port already in use — another process is bound to `APP_PORT`; change it
   via **Reconfigure** in the installer or edit `app.env` directly and
-  `systemctl restart torrent-manager`.
+  `systemctl restart ihs-torrent-manager`.
 
 ## Torrents stuck in "queued" / never syncing
 
 This means the worker can't reach qBittorrent.
 
 ```bash
-journalctl -u torrent-manager-worker -n 100
+journalctl -u ihs-torrent-manager-worker -n 100
 curl http://127.0.0.1:8080/api/v2/app/version   # from the server itself
 ```
 
@@ -93,7 +93,7 @@ database-backed counter will still apply for its own window).
 ## Reverting a bad upgrade
 
 ```bash
-sudo /opt/torrent-manager/scripts/restore.sh /var/backups/torrent-manager/<latest-backup>.tar.gz
+sudo /opt/ihs-torrent-manager/scripts/restore.sh /var/backups/ihs-torrent-manager/<latest-backup>.tar.gz
 ```
 
 See [backup.md](backup.md).

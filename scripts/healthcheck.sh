@@ -8,7 +8,7 @@
 
 set -uo pipefail
 
-CONFIG_DIR="/etc/torrent-manager"
+CONFIG_DIR="/etc/ihs-torrent-manager"
 STATE_FILE="$CONFIG_DIR/install.conf"
 
 if [[ -t 1 ]]; then C_GREEN='\033[32m'; C_RED='\033[31m'; C_RESET='\033[0m'; else C_GREEN=''; C_RED=''; C_RESET=''; fi
@@ -24,7 +24,7 @@ if [[ -f "$STATE_FILE" ]]; then
   source "$STATE_FILE"
 fi
 
-for svc in qbittorrent-nox torrent-manager torrent-manager-worker torrent-manager-portal; do
+for svc in qbittorrent-nox ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal; do
   if systemctl is-active --quiet "$svc" 2>/dev/null; then
     ok "$svc is running"
   else
@@ -39,9 +39,9 @@ if curl -fs "http://127.0.0.1:${PORTAL_PORT}/health" >/dev/null 2>&1; then ok "D
 if (( STATUS != 0 )); then
   echo
   echo "Diagnostics:"
-  echo "  journalctl -u torrent-manager -n 100"
-  echo "  journalctl -u torrent-manager-worker -n 100"
-  echo "  journalctl -u torrent-manager-portal -n 100"
+  echo "  journalctl -u ihs-torrent-manager -n 100"
+  echo "  journalctl -u ihs-torrent-manager-worker -n 100"
+  echo "  journalctl -u ihs-torrent-manager-portal -n 100"
   echo "  journalctl -u qbittorrent-nox -n 100"
 fi
 

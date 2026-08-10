@@ -1,5 +1,5 @@
 {
-  "name": "@torrent-manager/shared",
+  "name": "@ihs-torrent-manager/shared",
   "version": "1.0.0",
   "private": true,
   "main": "dist/index.js",

@@ -1,5 +1,5 @@
 {
-  "name": "@torrent-manager/portal",
+  "name": "@ihs-torrent-manager/portal",
   "version": "1.0.0",
   "private": true,
   "main": "dist/index.js",
@@ -10,7 +10,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@torrent-manager/shared": "1.0.0",
+    "@ihs-torrent-manager/shared": "1.0.0",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "helmet": "^7.1.0",

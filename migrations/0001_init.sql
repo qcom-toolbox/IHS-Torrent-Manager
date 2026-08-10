@@ -1,4 +1,4 @@
--- Initial schema for Torrent Manager
+-- Initial schema for IHS Torrent Manager
 
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

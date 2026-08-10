@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Torrent Manager - interactive Debian installer
+# IHS Torrent Manager - interactive Debian installer
 #
 #   sudo ./install.sh
 #
@@ -17,11 +17,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 
-DEFAULT_APP_DIR="/opt/torrent-manager"
+DEFAULT_APP_DIR="/opt/ihs-torrent-manager"
 DEFAULT_DOWNLOAD_DIR="/srv/torrents"
-DATA_DIR="/var/lib/torrent-manager"
-CONFIG_DIR="/etc/torrent-manager"
-SERVICE_USER="torrent-manager"
+DATA_DIR="/var/lib/ihs-torrent-manager"
+CONFIG_DIR="/etc/ihs-torrent-manager"
+SERVICE_USER="ihs-torrent-manager"
 SYSTEMD_DIR="/etc/systemd/system"
 STATE_FILE="$CONFIG_DIR/install.conf"
 
@@ -190,7 +190,7 @@ detect_existing_installation() {
 # ---------------------------------------------------------------------------
 
 collect_configuration() {
-  header "Torrent Manager Installation"
+  header "IHS Torrent Manager Installation"
 
   prompt APP_DIR "Application directory" "$DEFAULT_APP_DIR"
   prompt DOWNLOAD_DIR "Download directory" "$DEFAULT_DOWNLOAD_DIR"
@@ -311,7 +311,7 @@ gen_secret() {
 write_env_files() {
   header "Writing Configuration"
 
-  local db_path="$DATA_DIR/torrent-manager.sqlite"
+  local db_path="$DATA_DIR/ihs-torrent-manager.sqlite"
   local session_secret portal_session_secret qbt_username qbt_password
 
   if [[ -f "$CONFIG_DIR/app.env" ]] && grep -q '^SESSION_SECRET=' "$CONFIG_DIR/app.env"; then
@@ -403,7 +403,7 @@ write_notice_file() {
 initialize_database() {
   header "Database & Admin Account"
 
-  local db_path="$DATA_DIR/torrent-manager.sqlite"
+  local db_path="$DATA_DIR/ihs-torrent-manager.sqlite"
   log "Running database migrations..."
   ( cd "$APP_DIR" && sudo -u "$SERVICE_USER" env DATABASE_PATH="$db_path" node shared/dist/db/migrate.js )
   ok "Migrations applied"
@@ -503,7 +503,7 @@ install_systemd_units() {
   header "Configuring systemd Services"
 
   local src dest
-  for name in torrent-manager torrent-manager-worker torrent-manager-portal qbittorrent-nox; do
+  for name in ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox; do
     src="$APP_DIR/systemd/${name}.service"
     dest="$SYSTEMD_DIR/${name}.service"
     sed \
@@ -517,12 +517,12 @@ install_systemd_units() {
   ok "Unit files written to $SYSTEMD_DIR"
 
   systemctl daemon-reload
-  systemctl enable qbittorrent-nox torrent-manager torrent-manager-worker torrent-manager-portal >/dev/null
+  systemctl enable qbittorrent-nox ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal >/dev/null
   ok "Services enabled at boot"
 
-  systemctl restart torrent-manager-worker
-  systemctl restart torrent-manager
-  systemctl restart torrent-manager-portal
+  systemctl restart ihs-torrent-manager-worker
+  systemctl restart ihs-torrent-manager
+  systemctl restart ihs-torrent-manager-portal
   ok "Services started"
 }
 
@@ -543,8 +543,8 @@ configure_firewall() {
   log "Detected UFW ($ufw_status)"
 
   if confirm "Allow inbound TCP $APP_PORT (management panel) and $PORTAL_PORT (download portal) through UFW?"; then
-    ufw allow "$APP_PORT"/tcp comment 'Torrent Manager panel' >/dev/null
-    ufw allow "$PORTAL_PORT"/tcp comment 'Torrent Manager download portal' >/dev/null
+    ufw allow "$APP_PORT"/tcp comment 'IHS Torrent Manager panel' >/dev/null
+    ufw allow "$PORTAL_PORT"/tcp comment 'IHS Torrent Manager download portal' >/dev/null
     ok "UFW rules added for ports $APP_PORT and $PORTAL_PORT"
     warn "qBittorrent's WebUI port ($QBT_PORT) is bound to 127.0.0.1 and intentionally NOT opened in the firewall."
   else
@@ -573,7 +573,7 @@ configure_reverse_proxy() {
       local domain
       prompt domain "Domain name to serve the panel on (leave blank to skip)" ""
       if [[ -n "$domain" ]]; then
-        cat > "/etc/nginx/sites-available/torrent-manager" <<EOF
+        cat > "/etc/nginx/sites-available/ihs-torrent-manager" <<EOF
 server {
     listen 80;
     server_name $domain;
@@ -600,7 +600,7 @@ server {
     }
 }
 EOF
-        ln -sf /etc/nginx/sites-available/torrent-manager /etc/nginx/sites-enabled/torrent-manager
+        ln -sf /etc/nginx/sites-available/ihs-torrent-manager /etc/nginx/sites-enabled/ihs-torrent-manager
         nginx -t && systemctl reload nginx
         sed -i 's/^TRUST_PROXY=.*/TRUST_PROXY=true/' "$CONFIG_DIR/app.env" "$CONFIG_DIR/portal.env"
         ok "nginx configured for $domain (panel) and downloads.$domain (portal)."
@@ -656,11 +656,11 @@ run_health_checks() {
   if systemctl is-active --quiet qbittorrent-nox; then ok "qBittorrent service is running"; else fail "qBittorrent service is not running"; all_ok=0; fi
   if curl -fs "http://127.0.0.1:${QBT_PORT}/api/v2/app/version" >/dev/null 2>&1; then ok "qBittorrent"; else fail "qBittorrent WebUI not responding"; all_ok=0; fi
 
-  if [[ -f "$DATA_DIR/torrent-manager.sqlite" ]]; then ok "Database"; else fail "Database file not found"; all_ok=0; fi
+  if [[ -f "$DATA_DIR/ihs-torrent-manager.sqlite" ]]; then ok "Database"; else fail "Database file not found"; all_ok=0; fi
 
-  if systemctl is-active --quiet torrent-manager-worker; then ok "Torrent Worker"; else fail "Torrent Worker service is not running"; all_ok=0; fi
+  if systemctl is-active --quiet ihs-torrent-manager-worker; then ok "Torrent Worker"; else fail "Torrent Worker service is not running"; all_ok=0; fi
 
-  if systemctl is-active --quiet torrent-manager; then
+  if systemctl is-active --quiet ihs-torrent-manager; then
     if curl -fs "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null 2>&1; then
       ok "Management Panel"
     else
@@ -672,7 +672,7 @@ run_health_checks() {
     all_ok=0
   fi
 
-  if systemctl is-active --quiet torrent-manager-portal; then
+  if systemctl is-active --quiet ihs-torrent-manager-portal; then
     if curl -fs "http://127.0.0.1:${PORTAL_PORT}/health" >/dev/null 2>&1; then
       ok "Download Portal"
     else
@@ -705,10 +705,10 @@ run_health_checks() {
     ok "All health checks passed."
   else
     fail "One or more health checks failed. Diagnostics:"
-    echo "    systemctl status torrent-manager torrent-manager-worker torrent-manager-portal qbittorrent-nox"
-    echo "    journalctl -u torrent-manager -n 100"
-    echo "    journalctl -u torrent-manager-worker -n 100"
-    echo "    journalctl -u torrent-manager-portal -n 100"
+    echo "    systemctl status ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox"
+    echo "    journalctl -u ihs-torrent-manager -n 100"
+    echo "    journalctl -u ihs-torrent-manager-worker -n 100"
+    echo "    journalctl -u ihs-torrent-manager-portal -n 100"
     echo "    journalctl -u qbittorrent-nox -n 100"
   fi
 }
@@ -725,19 +725,19 @@ Download portal:     http://${ip}:${PORTAL_PORT}   (or http://127.0.0.1:${PORTAL
 
 Application directory:   $APP_DIR
 Torrent storage:         $DOWNLOAD_DIR
-Database:                $DATA_DIR/torrent-manager.sqlite
+Database:                $DATA_DIR/ihs-torrent-manager.sqlite
 Configuration:            $CONFIG_DIR/{app,worker,portal}.env
 
 Services:
-  systemctl status torrent-manager
-  systemctl status torrent-manager-worker
-  systemctl status torrent-manager-portal
+  systemctl status ihs-torrent-manager
+  systemctl status ihs-torrent-manager-worker
+  systemctl status ihs-torrent-manager-portal
   systemctl status qbittorrent-nox
 
 Logs:
-  journalctl -u torrent-manager -f
-  journalctl -u torrent-manager-worker -f
-  journalctl -u torrent-manager-portal -f
+  journalctl -u ihs-torrent-manager -f
+  journalctl -u ihs-torrent-manager-worker -f
+  journalctl -u ihs-torrent-manager-portal -f
 
 To upgrade later:   sudo ./install.sh   (choose "Upgrade" when an existing installation is detected)
 To uninstall:       sudo ./uninstall.sh
@@ -808,7 +808,7 @@ run_upgrade() {
 
 initialize_database_upgrade_only() {
   header "Database"
-  local db_path="$DATA_DIR/torrent-manager.sqlite"
+  local db_path="$DATA_DIR/ihs-torrent-manager.sqlite"
   log "Running database migrations (existing data is preserved)..."
   ( cd "$APP_DIR" && sudo -u "$SERVICE_USER" env DATABASE_PATH="$db_path" node shared/dist/db/migrate.js )
   ok "Migrations applied"
@@ -894,7 +894,7 @@ main() {
   require_root
   if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     echo "Usage: sudo ./install.sh"
-    echo "Interactive installer for Torrent Manager. Run with no arguments."
+    echo "Interactive installer for IHS Torrent Manager. Run with no arguments."
     exit 0
   fi
 

@@ -1,4 +1,4 @@
-# Torrent Manager
+# IHS Torrent Manager
 
 A self-hosted torrent management platform for a private Debian server: a
 full authenticated management panel backed by qBittorrent, plus a separate,
@@ -95,8 +95,8 @@ Debian 11 (bullseye), 12 (bookworm), and 13 (trixie), on `amd64` or
 ## Installation
 
 ```bash
-git clone https://github.com/qcom-toolbox/torrent-manager.git
-cd torrent-manager
+git clone https://github.com/qcom-toolbox/IHS-Torrent-Manager.git
+cd IHS-Torrent-Manager
 sudo ./install.sh
 ```
 
@@ -145,7 +145,7 @@ overwriting anything.
 ## Updating
 
 ```bash
-cd torrent-manager
+cd IHS-Torrent-Manager
 git pull
 sudo ./upgrade.sh
 ```

@@ -7,7 +7,7 @@ import {
   TorrentEvents,
   QbittorrentClient,
   mapQbtState,
-} from '@torrent-manager/shared';
+} from '@ihs-torrent-manager/shared';
 
 const shared = loadSharedConfig();
 const qbtConfig = loadQbtConfig();

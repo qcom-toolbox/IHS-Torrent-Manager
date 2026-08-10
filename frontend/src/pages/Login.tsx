@@ -42,7 +42,7 @@ export default function Login() {
           </div>
         )}
         <form onSubmit={handleSubmit} className="w-full rounded-lg border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="mb-6 text-xl font-bold text-slate-900 dark:text-slate-100">Torrent Manager</h1>
+          <h1 className="mb-6 text-xl font-bold text-slate-900 dark:text-slate-100">IHS Torrent Manager</h1>
           {error && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
               {error}

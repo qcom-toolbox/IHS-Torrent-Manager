@@ -1,10 +1,10 @@
 # Template unit file -- install.sh substitutes __APP_DIR__, __DATA_DIR__,
 # __CONFIG_DIR__ and __SERVICE_USER__ for the paths/user chosen during
 # installation, then writes the result to
-# /etc/systemd/system/torrent-manager-worker.service.
+# /etc/systemd/system/ihs-torrent-manager-worker.service.
 [Unit]
-Description=Torrent Manager - Background Sync Worker
-Documentation=https://github.com/qcom-toolbox/torrent-manager
+Description=IHS Torrent Manager - Background Sync Worker
+Documentation=https://github.com/qcom-toolbox/IHS-Torrent-Manager
 After=network-online.target qbittorrent-nox.service
 Wants=network-online.target
 
@@ -34,7 +34,7 @@ MemoryDenyWriteExecute=true
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=torrent-manager-worker
+SyslogIdentifier=ihs-torrent-manager-worker
 
 [Install]
 WantedBy=multi-user.target

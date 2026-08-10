@@ -12,8 +12,8 @@
 ## Quick start
 
 ```bash
-git clone https://github.com/qcom-toolbox/torrent-manager.git
-cd torrent-manager
+git clone https://github.com/qcom-toolbox/IHS-Torrent-Manager.git
+cd IHS-Torrent-Manager
 sudo ./install.sh
 ```
 
@@ -23,12 +23,12 @@ sudo ./install.sh
    `/proc/meminfo`, and `df` to confirm Debian, architecture, RAM, and disk
    space are sufficient. Warns (with a chance to continue) on unsupported
    combinations rather than silently proceeding.
-2. **Existing installation check** — if `/etc/torrent-manager/install.conf`
+2. **Existing installation check** — if `/etc/ihs-torrent-manager/install.conf`
    exists, you're dropped into the Upgrade/Repair/Reconfigure/Uninstall/
    Abort menu instead of a fresh install.
 3. **Interactive prompts**:
    ```
-   Application directory [/opt/torrent-manager]:
+   Application directory [/opt/ihs-torrent-manager]:
    Download directory [/srv/torrents]:
    Application port [3000]:
    Download portal port [3001]:
@@ -41,14 +41,14 @@ sudo ./install.sh
    compile the SQLite driver), `sqlite3`, `qbittorrent-nox`, and Node.js 20
    LTS (from NodeSource if the distro's own package is older).
 5. **System user & directories** — creates a dedicated, unprivileged
-   `torrent-manager` system user (no login shell) and the application,
+   `ihs-torrent-manager` system user (no login shell) and the application,
    data, download, and config directories with restrictive ownership.
 6. **Deploy & build** — copies the repository into the application
    directory (or builds in place if already running from there), installs
    npm dependencies, compiles TypeScript, and builds the React frontend.
 7. **Configuration & secrets** — generates a random session secret per
    service and a random qBittorrent WebUI username/password, and writes
-   three separate environment files under `/etc/torrent-manager/`
+   three separate environment files under `/etc/ihs-torrent-manager/`
    (`app.env`, `worker.env`, `portal.env`) — the portal's file deliberately
    never contains qBittorrent credentials.
 8. **Database** — runs migrations against a fresh SQLite database, creates
@@ -60,8 +60,8 @@ sudo ./install.sh
    generated temporary password) to set the permanent WebUI
    username/password the app will use — qBittorrent hashes its own
    password, this script never reimplements that.
-10. **systemd** — installs `torrent-manager.service`,
-    `torrent-manager-worker.service`, `torrent-manager-portal.service`, and
+10. **systemd** — installs `ihs-torrent-manager.service`,
+    `ihs-torrent-manager-worker.service`, `ihs-torrent-manager-portal.service`, and
     `qbittorrent-nox.service`, enables them at boot, and starts them.
 11. **Firewall** — if UFW is installed, offers to open the panel and portal
     ports; never touches an unrelated existing ruleset without asking, and
@@ -78,7 +78,7 @@ sudo ./install.sh
 ## Non-interactive re-runs
 
 Running `sudo ./install.sh` again after a successful install detects
-`/etc/torrent-manager/install.conf` and offers:
+`/etc/ihs-torrent-manager/install.conf` and offers:
 
 ```
 1) Upgrade      - deploy the latest code, run migrations, keep all data

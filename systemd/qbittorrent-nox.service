@@ -6,7 +6,7 @@
 # written by install.sh before the first start -- it is never reachable
 # from outside the host, only from the app/worker over localhost.
 [Unit]
-Description=qBittorrent-nox (torrent backend for Torrent Manager)
+Description=qBittorrent-nox (torrent backend for IHS Torrent Manager)
 Documentation=https://github.com/qbittorrent/qBittorrent
 After=network-online.target
 Wants=network-online.target

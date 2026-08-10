@@ -15,7 +15,7 @@ import {
   resolveTorrentContentPaths,
   isSafeCategory,
   sanitizeFilename,
-} from '@torrent-manager/shared';
+} from '@ihs-torrent-manager/shared';
 import { AuthedRequest, requireAuth } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
 import { uploadLimiter } from '../middleware/rateLimit';
