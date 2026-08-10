@@ -308,11 +308,26 @@ gen_secret() {
   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 }
 
+# Reads KEY= from an existing env file if present, else prints the given
+# default. Used so re-running write_env_files() (every upgrade/repair/
+# reconfigure) never silently clobbers a value the admin deliberately
+# customized by hand-editing app.env/portal.env (APP_HOST, COOKIE_SECURE,
+# TRUST_PROXY, ...) back to its install-time default.
+preserve_env_value() {
+  local file="$1" key="$2" default="$3"
+  if [[ -f "$file" ]] && grep -q "^${key}=" "$file"; then
+    grep "^${key}=" "$file" | head -1 | cut -d= -f2-
+  else
+    echo "$default"
+  fi
+}
+
 write_env_files() {
   header "Writing Configuration"
 
   local db_path="$DATA_DIR/ihs-torrent-manager.sqlite"
   local session_secret portal_session_secret qbt_username qbt_password
+  local app_host portal_host app_cookie_secure app_trust_proxy portal_cookie_secure portal_trust_proxy
 
   if [[ -f "$CONFIG_DIR/app.env" ]] && grep -q '^SESSION_SECRET=' "$CONFIG_DIR/app.env"; then
     session_secret="$(grep '^SESSION_SECRET=' "$CONFIG_DIR/app.env" | cut -d= -f2-)"
@@ -334,6 +349,13 @@ write_env_files() {
   QBT_USERNAME="$qbt_username"
   QBT_PASSWORD="$qbt_password"
 
+  app_host="$(preserve_env_value "$CONFIG_DIR/app.env" APP_HOST 127.0.0.1)"
+  portal_host="$(preserve_env_value "$CONFIG_DIR/portal.env" PORTAL_HOST 127.0.0.1)"
+  app_cookie_secure="$(preserve_env_value "$CONFIG_DIR/app.env" COOKIE_SECURE false)"
+  app_trust_proxy="$(preserve_env_value "$CONFIG_DIR/app.env" TRUST_PROXY false)"
+  portal_cookie_secure="$(preserve_env_value "$CONFIG_DIR/portal.env" COOKIE_SECURE false)"
+  portal_trust_proxy="$(preserve_env_value "$CONFIG_DIR/portal.env" TRUST_PROXY false)"
+
   cat > "$CONFIG_DIR/app.env" <<EOF
 NODE_ENV=production
 DATABASE_PATH=$db_path
@@ -342,10 +364,10 @@ DISK_WARNING_THRESHOLD_PERCENT_FREE=20
 DISK_CRITICAL_THRESHOLD_PERCENT_FREE=10
 DISK_BLOCK_THRESHOLD_PERCENT_FREE=5
 APP_PORT=$APP_PORT
-APP_HOST=127.0.0.1
+APP_HOST=$app_host
 SESSION_SECRET=$session_secret
-COOKIE_SECURE=false
-TRUST_PROXY=false
+COOKIE_SECURE=$app_cookie_secure
+TRUST_PROXY=$app_trust_proxy
 MAX_UPLOAD_SIZE_BYTES=10485760
 TORRENT_HOST=http://127.0.0.1:$QBT_PORT
 TORRENT_USERNAME=$qbt_username
@@ -375,10 +397,10 @@ NODE_ENV=production
 DATABASE_PATH=$db_path
 TORRENT_DOWNLOAD_DIR=$DOWNLOAD_DIR
 PORTAL_PORT=$PORTAL_PORT
-PORTAL_HOST=127.0.0.1
+PORTAL_HOST=$portal_host
 PORTAL_SESSION_SECRET=$portal_session_secret
-COOKIE_SECURE=false
-TRUST_PROXY=false
+COOKIE_SECURE=$portal_cookie_secure
+TRUST_PROXY=$portal_trust_proxy
 NOTICE_FILE_PATH=$CONFIG_DIR/notice.txt
 DOWNLOAD_TOKEN_TTL_MINUTES=60
 EOF

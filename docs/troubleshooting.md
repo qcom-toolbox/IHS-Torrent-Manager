@@ -99,14 +99,25 @@ and [security.md](security.md#transport-security-https)), then restart
 the affected service(s).
 
 If instead you're accessing the panel/portal from another device on your
-network and get no response at all (not even a blank page -- the
+network and get `ERR_CONNECTION_REFUSED` (not even a blank page -- the
 connection itself fails), that's a *different* issue: `APP_HOST`/
 `PORTAL_HOST` default to `127.0.0.1` (loopback only, deliberately). Either
 tunnel in (`ssh -L 3000:127.0.0.1:3000 -L 3001:127.0.0.1:3001 user@host`)
 or, for trusted-LAN access, set `APP_HOST=0.0.0.0` /
-`PORTAL_HOST=0.0.0.0` in the respective env file and restart. Never do
-this for `TORRENT_HOST`/qBittorrent's own bind address -- that one must
-stay on `127.0.0.1`.
+`PORTAL_HOST=0.0.0.0` in the respective env file and restart:
+
+```bash
+sudo sed -i 's/^APP_HOST=.*/APP_HOST=0.0.0.0/' /etc/ihs-torrent-manager/app.env
+sudo sed -i 's/^PORTAL_HOST=.*/PORTAL_HOST=0.0.0.0/' /etc/ihs-torrent-manager/portal.env
+sudo systemctl restart ihs-torrent-manager ihs-torrent-manager-portal
+```
+
+Never do this for `TORRENT_HOST`/qBittorrent's own bind address -- that
+one must stay on `127.0.0.1`. This customization (and `COOKIE_SECURE`/
+`TRUST_PROXY`, if you've set those too) is preserved across
+`sudo ./upgrade.sh` / `sudo ./fix-install.sh` / `sudo ./install.sh`
+(Reconfigure) runs -- they only fall back to the `127.0.0.1`/`false`
+defaults if the setting was never customized in the first place.
 
 ## Management panel won't start
 
