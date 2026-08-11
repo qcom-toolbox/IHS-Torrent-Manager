@@ -170,6 +170,33 @@ the filesystem backing `TORRENT_DOWNLOAD_DIR` drops below the configured
 block threshold (default 5% free). Free up space or raise the threshold in
 **Settings** (admin).
 
+## Adding a storage location fails with a "not writable" / remediation message
+
+This means the path exists and has the right Unix ownership, but the
+systemd sandbox (`ProtectSystem=strict`) doesn't have it in its
+`ReadWritePaths=` allowlist yet — a real test write to the directory was
+attempted and denied at the kernel level. The error message itself
+contains the exact command to run; it looks like:
+
+```bash
+sudo scripts/add-storage-path.sh /mnt/disk2/torrents "Disk 2"
+```
+
+Run that once, as root, on the server. It creates the directory if
+missing, grants `qbittorrent-nox`, the management panel, and the worker
+write access (and the portal read-only access), restarts the four
+services, and registers the location — no need to also add it from the
+Settings UI afterward, it appears automatically. See
+[administration.md](administration.md#multi-disk-storage-locations) for
+the full flow.
+
+If a location was working and suddenly stops (uploads to it fail again
+after an `upgrade.sh`/`fix-install.sh` run), that's a bug — the installer
+is supposed to re-grant every previously-registered location's sandbox
+access automatically every time it rewrites the systemd unit files.
+Check `journalctl -u ihs-torrent-manager -n 50` for the actual denial and
+open an issue.
+
 ## Download portal shows nothing
 
 - Confirm at least one torrent has actually reached `status = completed`

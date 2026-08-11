@@ -11,3 +11,4 @@ export * from './sessionStore';
 export * from './notice';
 export * from './downloadTokens';
 export * from './transferPolicy';
+export * from './storageLocations';

@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 import { useToast } from '../lib/ToastContext';
 import DiskSpaceWidget from '../components/DiskSpaceWidget';
+import StorageLocationsCard from '../components/StorageLocationsCard';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -177,6 +178,8 @@ export default function Settings() {
               <button type="submit" disabled={savingThresholds} className="btn mt-2">Save thresholds</button>
             </form>
           </div>
+
+          <StorageLocationsCard />
 
           {transferPolicy && (
             <div className="card max-w-lg">

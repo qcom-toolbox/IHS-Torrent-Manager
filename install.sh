@@ -557,6 +557,19 @@ EOF
 write_systemd_unit_files() {
   header "Installing systemd Unit Files"
 
+  # Extra disks registered via scripts/add-storage-path.sh live in the
+  # database, not just as one-off sed edits to the deployed unit files --
+  # otherwise regenerating the units here (every install/upgrade/repair
+  # run) would silently wipe out sandbox access to any disk added after
+  # the initial install, exactly like the APP_HOST/PORTAL_HOST clobbering
+  # bug fixed earlier. Re-deriving the extra ReadWritePaths/ReadOnlyPaths
+  # from the DB on every write makes this idempotent and durable.
+  local db_path="$DATA_DIR/ihs-torrent-manager.sqlite"
+  local extra_paths=""
+  if [[ -f "$db_path" ]] && command -v sqlite3 >/dev/null 2>&1; then
+    extra_paths="$(sqlite3 "$db_path" "SELECT path FROM storage_locations;" 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  fi
+
   local src dest
   for name in ihs-torrent-manager ihs-torrent-manager-worker ihs-torrent-manager-portal qbittorrent-nox; do
     src="$APP_DIR/systemd/${name}.service"
@@ -568,6 +581,23 @@ write_systemd_unit_files() {
       -e "s#__CONFIG_DIR__#${CONFIG_DIR}#g" \
       -e "s#__SERVICE_USER__#${SERVICE_USER}#g" \
       "$src" > "$dest"
+
+    if [[ -n "$extra_paths" ]]; then
+      case "$name" in
+        # The portal only ever reads completed files, never writes torrent
+        # data -- same read-only/read-write asymmetry as the default
+        # download directory already has.
+        ihs-torrent-manager-portal)
+          sed -i "s#^ReadOnlyPaths=.*#& ${extra_paths}#" "$dest"
+          ;;
+        # qBittorrent is the process that actually writes torrent data to
+        # disk, so it needs write access to every extra disk exactly like
+        # the panel and worker do.
+        *)
+          sed -i "s#^ReadWritePaths=.*#& ${extra_paths}#" "$dest"
+          ;;
+      esac
+    fi
   done
   systemctl daemon-reload
   ok "Unit files written to $SYSTEMD_DIR"

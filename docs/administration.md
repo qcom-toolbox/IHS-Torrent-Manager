@@ -113,6 +113,49 @@ thresholds are configurable from Settings and enforced both in the UI
 (color-coded) and in the backend (new uploads are rejected once free space
 drops below the block threshold, regardless of what the UI shows).
 
+## Multi-disk storage locations
+
+By default every torrent is saved under `TORRENT_DOWNLOAD_DIR`. Settings →
+**Storage locations** (admin only) lets you register additional disks/mount
+points as extra save destinations; users then pick one from a "Save to"
+dropdown when uploading a `.torrent` file (the dropdown only appears once a
+second location exists).
+
+Adding a location is a two-step process, driven by the hardened systemd
+sandbox the panel, worker, portal, and qBittorrent all run under
+(`ProtectSystem=strict` with an explicit `ReadWritePaths=`/`ReadOnlyPaths=`
+allowlist — see [security.md](security.md#storage-location-containment)):
+
+1. **Register it in the web UI** (Settings → Storage locations → add a
+   label and the absolute path on the server, e.g. `/mnt/disk2/torrents`).
+   If the disk is already inside the sandbox allowlist, this is all you
+   need — the location becomes selectable immediately.
+2. **If the sandbox doesn't have access yet**, the add attempt fails with
+   the exact command to run on the server, e.g.:
+
+   ```bash
+   sudo scripts/add-storage-path.sh /mnt/disk2/torrents "Disk 2"
+   ```
+
+   This one-time, root-run script creates the directory if needed
+   (owned by the service user), grants `qbittorrent-nox` (which actually
+   writes the torrent data), the management panel, and the worker
+   `ReadWritePaths=` access, grants the download portal `ReadOnlyPaths=`
+   access (it only ever reads completed files), reloads systemd, restarts
+   the four services, and registers the location in the database — so it
+   works standalone without touching the UI first, too.
+
+Once granted, access to a disk persists across future
+`install.sh`/`upgrade.sh`/`fix-install.sh` runs: the installer re-derives
+the full list of extra `ReadWritePaths=`/`ReadOnlyPaths=` entries from the
+`storage_locations` table every time it regenerates the systemd unit
+files, rather than overwriting them back to just the default directory.
+
+A storage location can only be removed (Settings → Storage locations →
+Remove) once no torrent still references it — removing the entry never
+touches files already on disk, it just stops offering that destination for
+new uploads.
+
 ## Bandwidth limits
 
 Settings → **Bandwidth limits** (admin only) sets global upload/download

@@ -7,6 +7,7 @@ import {
   AuditLog,
   DownloadTokens,
   resolveTorrentContentPaths,
+  resolveStorageRootPath,
   genericDownloadFilename,
 } from '@ihs-torrent-manager/shared';
 import { AuthedRequest } from '../middleware/auth';
@@ -58,8 +59,19 @@ router.get('/:token', async (req: AuthedRequest, res) => {
   }
 
   try {
+    // A torrent's files are confined to whichever storage location it was
+    // added under -- never blindly the default directory, so a torrent
+    // saved on a second disk can't have its containment check bypassed by
+    // resolving against the wrong (unrelated) base directory.
+    let storageRoot: string;
+    try {
+      storageRoot = resolveStorageRootPath(shared.torrentDownloadDir, torrent.storage_location_id);
+    } catch {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     const qbtFiles = await qbt.getFiles(torrent.torrent_hash);
-    const resolved = resolveTorrentContentPaths(shared.torrentDownloadDir, torrent.save_path, qbtFiles);
+    const resolved = resolveTorrentContentPaths(storageRoot, torrent.save_path, qbtFiles);
     if (resolved.length === 0) {
       res.status(404).json({ error: 'Not found' });
       return;

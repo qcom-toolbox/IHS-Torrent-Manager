@@ -70,6 +70,37 @@ hidden form field (`portal/src/index.ts`).
 - Upload size is capped (`MAX_UPLOAD_SIZE_BYTES`), and only one file per
   request is accepted.
 
+### Storage location containment
+
+Multi-disk support (`shared/src/storageLocations.ts`) extends the
+containment model above from a single base directory
+(`TORRENT_DOWNLOAD_DIR`) to a small, admin-approved set of them, without
+weakening it:
+
+- A torrent's save directory is never taken from client input. Uploads
+  reference a storage location by numeric `id` only; the server looks up
+  the corresponding path server-side (`resolveStorageRootPath`) and 404s
+  if the id doesn't exist or was since deleted (fail closed, not open).
+- Registering a new location (`POST /api/admin/storage-locations`,
+  admin-only) requires the submitted path to be absolute (relative paths
+  are rejected outright rather than silently resolved against the
+  server process's working directory) and to already exist as a real,
+  writable directory (`checkStorageLocationWritable` does a genuine test
+  write + unlink, not just a permission-bit check, since the systemd
+  sandbox below can deny writes that Unix permissions would otherwise
+  allow).
+- Whichever root a torrent's data lives under, `safeResolve` still
+  confines every filesystem access to that specific root -- multi-disk
+  support changes *which* base directory is used, not whether one is
+  enforced.
+- At the OS level, every additional disk must also be explicitly added to
+  the `ProtectSystem=strict` sandbox's `ReadWritePaths=`/`ReadOnlyPaths=`
+  allowlist for each service (`scripts/add-storage-path.sh`, root-only) --
+  a path outside that allowlist is denied at the kernel level regardless
+  of what the application layer or Unix permissions would otherwise
+  allow. See [administration.md](administration.md#multi-disk-storage-locations)
+  for the operational flow.
+
 ## Download privacy
 
 Every download -- from the management panel or the portal -- goes through

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import * as path from 'path';
 import {
   Users,
   Torrents,
@@ -8,10 +9,16 @@ import {
   isPasswordStrongEnough,
   TRANSFER_POLICY_KEYS,
   getTransferPolicy,
+  StorageLocations,
+  checkStorageLocationWritable,
+  getDiskSpace,
+  getDirectorySizeCached,
+  getConfiguredDiskThresholds,
 } from '@ihs-torrent-manager/shared';
 import { requireAuth, requireAdmin, AuthedRequest } from '../middleware/auth';
 import { requireCsrf } from '../middleware/csrf';
 import { qbt } from '../services/qbt';
+import { shared } from '../config';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -195,6 +202,105 @@ router.put('/transfer-policy', requireCsrf, async (req: AuthedRequest, res) => {
     req.ip
   );
   res.json(getTransferPolicy());
+});
+
+// Additional storage locations (extra disks/mount points) beyond the
+// default TORRENT_DOWNLOAD_DIR. Every path here is admin-approved and
+// stored server-side; uploads reference one by ID, never by a client-
+// supplied path (see routes/torrents.ts). Adding one only registers it in
+// the database -- if the path is on a disk the systemd sandbox doesn't
+// already have write access to (ReadWritePaths=), the writability check
+// below fails with the exact remediation command
+// (scripts/add-storage-path.sh), which handles the systemd side and then
+// registers it the same way.
+router.get('/storage-locations', async (_req, res) => {
+  const thresholds = getConfiguredDiskThresholds(shared);
+
+  async function describeLocation(id: number | null, label: string, dirPath: string, isDefault: boolean) {
+    const torrentCount = id === null
+      ? Torrents.all().filter((t) => t.storage_location_id === null).length
+      : StorageLocations.countTorrentsUsing(id);
+    let disk = null;
+    try {
+      const info = await getDiskSpace(dirPath, thresholds);
+      const torrentDataBytes = await getDirectorySizeCached(dirPath);
+      disk = { ...info, torrentDataBytes };
+    } catch {
+      // Path might be temporarily unreachable (unmounted disk, etc.) --
+      // still list the location, just without live disk stats.
+    }
+    return { id, label, path: dirPath, isDefault, torrentCount, disk };
+  }
+
+  const results = [
+    await describeLocation(null, 'Default', shared.torrentDownloadDir, true),
+    ...(await Promise.all(
+      StorageLocations.all().map((loc) => describeLocation(loc.id, loc.label, loc.path, false))
+    )),
+  ];
+  res.json({ locations: results });
+});
+
+router.post('/storage-locations', requireCsrf, (req: AuthedRequest, res) => {
+  const label = typeof req.body?.label === 'string' ? req.body.label.trim() : '';
+  const rawPath = typeof req.body?.path === 'string' ? req.body.path.trim() : '';
+
+  if (!label || label.length > 100) {
+    res.status(400).json({ error: 'Label is required (max 100 characters)' });
+    return;
+  }
+  if (!rawPath) {
+    res.status(400).json({ error: 'Path is required' });
+    return;
+  }
+  if (!path.isAbsolute(rawPath)) {
+    res.status(400).json({ error: 'Path must be absolute (e.g. /mnt/disk2/torrents)' });
+    return;
+  }
+  const absolutePath = path.resolve(rawPath);
+  if (absolutePath === shared.torrentDownloadDir) {
+    res.status(400).json({ error: 'This is already the default storage location' });
+    return;
+  }
+  if (StorageLocations.findByPath(absolutePath)) {
+    res.status(409).json({ error: 'This path is already registered as a storage location' });
+    return;
+  }
+
+  const check = checkStorageLocationWritable(absolutePath);
+  if (!check.ok) {
+    res.status(400).json({ error: check.reason });
+    return;
+  }
+
+  const location = StorageLocations.create(label, absolutePath);
+  AuditLog.record(req.currentUser!.id, 'storage_location_add', 'storage_location', String(location.id), {
+    label,
+    path: absolutePath,
+  }, req.ip);
+  res.status(201).json({ location });
+});
+
+router.delete('/storage-locations/:id', requireCsrf, (req: AuthedRequest, res) => {
+  const id = parseInt(req.params.id, 10);
+  const location = Number.isInteger(id) ? StorageLocations.findById(id) : undefined;
+  if (!location) {
+    res.status(404).json({ error: 'Storage location not found' });
+    return;
+  }
+  const inUse = StorageLocations.countTorrentsUsing(id);
+  if (inUse > 0) {
+    res.status(409).json({
+      error: `${inUse} torrent(s) still use this storage location. Delete or move them first -- the files on disk are never touched by removing a storage location entry itself.`,
+    });
+    return;
+  }
+  StorageLocations.delete(id);
+  AuditLog.record(req.currentUser!.id, 'storage_location_remove', 'storage_location', String(id), {
+    label: location.label,
+    path: location.path,
+  }, req.ip);
+  res.json({ ok: true });
 });
 
 export default router;

@@ -20,6 +20,7 @@ import {
   genericDownloadFilename,
   DownloadTokens,
   readNoticeText,
+  resolveStorageRootPath,
 } from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
 
@@ -74,9 +75,14 @@ function loadCompletedTorrentFiles(torrentId: number) {
   const torrent = Torrents.findById(torrentId);
   if (!torrent || torrent.status !== 'completed') return null;
   try {
-    const root = resolveContentRoot(shared.torrentDownloadDir, torrent.display_name);
+    // Confined to whichever storage location this torrent actually lives
+    // under (its own if set, else the default TORRENT_DOWNLOAD_DIR) --
+    // never blindly the default, so a torrent on a second disk can't have
+    // its containment check bypassed by resolving against the wrong base.
+    const downloadDir = resolveStorageRootPath(shared.torrentDownloadDir, torrent.storage_location_id);
+    const root = resolveContentRoot(downloadDir, torrent.display_name);
     if (!fs.existsSync(root)) return null;
-    const files = listFilesRecursively(shared.torrentDownloadDir, root);
+    const files = listFilesRecursively(downloadDir, root);
     if (files.length === 0) return null;
     return { torrent, files };
   } catch {

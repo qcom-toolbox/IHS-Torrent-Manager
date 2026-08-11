@@ -1,7 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useToast } from '../lib/ToastContext';
+
+interface StorageLocationOption {
+  id: number | null;
+  label: string;
+  isDefault: boolean;
+}
 
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
@@ -9,9 +15,18 @@ export default function Upload() {
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locations, setLocations] = useState<StorageLocationOption[]>([]);
+  const [storageLocationId, setStorageLocationId] = useState<string>('default');
   const inputRef = useRef<HTMLInputElement>(null);
   const { notify } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api
+      .get<{ locations: StorageLocationOption[] }>('/torrents/storage-locations')
+      .then((res) => setLocations(res.locations))
+      .catch(() => setLocations([]));
+  }, []);
 
   function pickFile(f: File | null) {
     setError(null);
@@ -34,6 +49,7 @@ export default function Upload() {
       const form = new FormData();
       form.append('torrent', file);
       if (category) form.append('category', category);
+      if (storageLocationId !== 'default') form.append('storageLocationId', storageLocationId);
       await api.postForm('/torrents/upload', form);
       notify('Torrent added successfully', 'success');
       navigate('/torrents');
@@ -79,6 +95,22 @@ export default function Upload() {
             <span className="text-sm text-slate-400">Click to choose or drag a .torrent file here</span>
           )}
         </div>
+        {locations.length > 1 && (
+          <>
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Save to</label>
+            <select
+              className="input mb-4"
+              value={storageLocationId}
+              onChange={(e) => setStorageLocationId(e.target.value)}
+            >
+              {locations.map((loc) => (
+                <option key={loc.id ?? 'default'} value={loc.id ?? 'default'}>
+                  {loc.label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Category (optional)</label>
         <input className="input mb-6" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. movies" />
         <button type="submit" disabled={submitting} className="btn w-full">

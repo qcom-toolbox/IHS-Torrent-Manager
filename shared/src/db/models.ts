@@ -36,6 +36,8 @@ export interface Torrent {
   created_at: string;
   completed_at: string | null;
   last_synced_at: string | null;
+  /** NULL means the default TORRENT_DOWNLOAD_DIR; otherwise a storage_locations.id. */
+  storage_location_id: number | null;
 }
 
 export interface AuditLogEntry {
@@ -125,18 +127,20 @@ export const Torrents = {
     original_filename: string;
     display_name: string;
     category: string;
+    storage_location_id?: number | null;
   }): Torrent {
     const info = getDb()
       .prepare(
-        `INSERT INTO torrents (torrent_hash, user_id, original_filename, display_name, category, status)
-         VALUES (?, ?, ?, ?, ?, 'queued')`
+        `INSERT INTO torrents (torrent_hash, user_id, original_filename, display_name, category, status, storage_location_id)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?)`
       )
       .run(
         data.torrent_hash,
         data.user_id,
         data.original_filename,
         data.display_name,
-        data.category
+        data.category,
+        data.storage_location_id ?? null
       );
     return Torrents.findById(info.lastInsertRowid as number)!;
   },

@@ -4,11 +4,13 @@ import {
   Torrents,
   TorrentEvents,
   AuditLog,
-  Settings,
   Users,
   DownloadTokens,
+  StorageLocations,
+  resolveStorageRootPath,
   getDiskSpace,
   getDirectorySizeCached,
+  getConfiguredDiskThresholds,
   canStartNewDownload,
   isSafeCategory,
   sanitizeFilename,
@@ -98,13 +100,19 @@ router.get('/all', (req: AuthedRequest, res) => {
   res.json({ torrents: torrents.map((t) => serializeTorrent(t, users.get(t.user_id))) });
 });
 
+// Minimal, non-admin-gated list so any authenticated user can pick a
+// destination disk when uploading -- full disk stats/torrent counts stay
+// admin-only (see /api/admin/storage-locations for that).
+router.get('/storage-locations', (_req: AuthedRequest, res) => {
+  const locations = [
+    { id: null as number | null, label: 'Default', isDefault: true },
+    ...StorageLocations.all().map((loc) => ({ id: loc.id, label: loc.label, isDefault: false })),
+  ];
+  res.json({ locations });
+});
+
 router.get('/disk', async (_req: AuthedRequest, res) => {
-  const settings = Settings.all();
-  const thresholds = {
-    warningPercentFree: parseInt(settings.disk_warning_percent_free ?? String(shared.diskWarningPercentFree), 10),
-    criticalPercentFree: parseInt(settings.disk_critical_percent_free ?? String(shared.diskCriticalPercentFree), 10),
-    blockPercentFree: parseInt(settings.disk_block_percent_free ?? String(shared.diskBlockPercentFree), 10),
-  };
+  const thresholds = getConfiguredDiskThresholds(shared);
   try {
     const info = await getDiskSpace(shared.torrentDownloadDir, thresholds);
     const torrentDataBytes = await getDirectorySizeCached(shared.torrentDownloadDir);
@@ -135,14 +143,24 @@ router.post('/upload', uploadLimiter, requireCsrf, upload.single('torrent'), asy
     return;
   }
 
-  const settings = Settings.all();
-  const thresholds = {
-    warningPercentFree: parseInt(settings.disk_warning_percent_free ?? String(shared.diskWarningPercentFree), 10),
-    criticalPercentFree: parseInt(settings.disk_critical_percent_free ?? String(shared.diskCriticalPercentFree), 10),
-    blockPercentFree: parseInt(settings.disk_block_percent_free ?? String(shared.diskBlockPercentFree), 10),
-  };
+  // A storage location is selected by ID from the admin-approved list --
+  // the client never supplies a path directly. No ID means the default
+  // TORRENT_DOWNLOAD_DIR.
+  let storageLocationId: number | null = null;
+  const rawLocationId = req.body?.storageLocationId;
+  if (rawLocationId !== undefined && rawLocationId !== '' && rawLocationId !== 'default') {
+    const parsed = parseInt(String(rawLocationId), 10);
+    if (!Number.isInteger(parsed) || !StorageLocations.findById(parsed)) {
+      res.status(400).json({ error: 'Unknown storage location' });
+      return;
+    }
+    storageLocationId = parsed;
+  }
+  const savePath = resolveStorageRootPath(shared.torrentDownloadDir, storageLocationId);
+
+  const thresholds = getConfiguredDiskThresholds(shared);
   try {
-    const disk = await getDiskSpace(shared.torrentDownloadDir, thresholds);
+    const disk = await getDiskSpace(savePath, thresholds);
     if (!canStartNewDownload(disk.freePercent, thresholds)) {
       res.status(507).json({
         error: `Insufficient free disk space (${disk.freePercent.toFixed(1)}% free). New downloads are blocked below ${thresholds.blockPercentFree}% free.`,
@@ -162,7 +180,7 @@ router.post('/upload', uploadLimiter, requireCsrf, upload.single('torrent'), asy
 
   try {
     await qbt.addTorrentFile(req.file.buffer, safeName, {
-      savepath: shared.torrentDownloadDir,
+      savepath: savePath,
       category: category || undefined,
     });
   } catch (err: any) {
@@ -176,6 +194,7 @@ router.post('/upload', uploadLimiter, requireCsrf, upload.single('torrent'), asy
     original_filename: safeName,
     display_name: validation.name ?? safeName,
     category,
+    storage_location_id: storageLocationId,
   });
 
   TorrentEvents.add(torrent.id, 'created', `Uploaded by ${req.currentUser!.username}`);

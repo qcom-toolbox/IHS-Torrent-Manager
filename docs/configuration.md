@@ -27,6 +27,13 @@ place; copy it to `.env` and adjust as needed.
 Disk thresholds can also be changed at runtime from **Settings** in the
 management panel (admin only) — no restart required.
 
+Additional disks beyond `TORRENT_DOWNLOAD_DIR` are not configured via
+environment variables — they're managed at runtime from **Settings →
+Storage locations** (admin only) and stored in the database. See
+[administration.md](administration.md#multi-disk-storage-locations) for
+the full flow, including the one-time `scripts/add-storage-path.sh`
+step required to grant a new disk sandbox access.
+
 | Variable | Default | Description |
 |---|---|---|
 | `NOTICE_FILE_PATH` | unset | Path to a plain-text access-warning banner shown on **both** login pages. Unset, or a missing/empty file, simply means no banner. |
