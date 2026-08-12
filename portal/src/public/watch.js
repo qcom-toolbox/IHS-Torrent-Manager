@@ -60,7 +60,7 @@
     select.addEventListener('change', function () {
       var chosen = parseInt(select.value, 10);
       if (chosen === currentTrack) return;
-      switchTrack(chosen, video.currentTime);
+      switchTrack(chosen, 0); // restart at 0:00 on an explicit track change, not the old position
     });
   }
 
