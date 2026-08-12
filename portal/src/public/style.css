@@ -142,13 +142,31 @@ button:hover { opacity: 0.9; }
 
 .empty { color: var(--muted); text-align: center; padding: 2rem 0; }
 
-.torrent-item { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.torrent-item { flex-direction: column; align-items: stretch; gap: 0.5rem; position: relative; }
 
 .item-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.torrent-details { width: 100%; }
+
+.torrent-summary {
+  cursor: pointer;
+  padding-right: 9rem; /* room for the absolutely-positioned "Download all" button, when present */
+}
+
+.torrent-summary:hover .name { color: var(--accent); }
+
+/* Sits in the same row as the (collapsed-by-default) summary above it. */
+.download-all-form {
+  position: absolute;
+  top: 1rem;
+  right: 0;
+  margin: 0;
+  width: auto;
 }
 
 .file-list {
