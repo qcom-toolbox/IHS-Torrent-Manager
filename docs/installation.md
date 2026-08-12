@@ -38,8 +38,12 @@ sudo ./install.sh
    Download portal password:  (hidden, confirmed)
    ```
 4. **Package installation** — `build-essential`, `python3` (needed to
-   compile the SQLite driver), `sqlite3`, `qbittorrent-nox`, and Node.js 20
-   LTS (from NodeSource if the distro's own package is older).
+   compile the SQLite driver), `sqlite3`, `qbittorrent-nox`, `ffmpeg` (used
+   by the download portal's in-browser video viewer to list and, when a
+   non-default audio track is picked, remux a file's audio tracks -- see
+   [security.md](security.md#in-browser-video-playback); never used to
+   re-encode video), and Node.js 20 LTS (from NodeSource if the distro's
+   own package is older).
 5. **System user & directories** — creates a dedicated, unprivileged
    `ihs-torrent-manager` system user (no login shell) and the application,
    data, download, and config directories with restrictive ownership.

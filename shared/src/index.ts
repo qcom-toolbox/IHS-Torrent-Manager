@@ -6,6 +6,7 @@ export * from './security/password';
 export * from './security/paths';
 export * from './services/diskSpace';
 export * from './services/torrentFiles';
+export * from './services/videoTracks';
 export * from './qbittorrent/client';
 export * from './sessionStore';
 export * from './notice';

@@ -2,62 +2,81 @@
   'use strict';
 
   var video = document.getElementById('player');
-  var row = document.getElementById('audio-track-row');
   var select = document.getElementById('audio-track-select');
-  if (!video || !row || !select) return;
+  if (!video) return;
 
-  function trackLabel(track, index) {
-    if (track.label) return track.label;
-    if (track.language) return track.language.toUpperCase();
-    return 'Track ' + (index + 1);
+  var streamUrl = video.dataset.streamUrl;
+  var defaultTrackRaw = video.dataset.defaultTrack;
+  var defaultTrack = defaultTrackRaw === '' ? null : parseInt(defaultTrackRaw, 10);
+
+  // Which track is currently loaded. Starts at the server-picked default
+  // (the plain, Range-enabled /stream URL with no ?track= at all).
+  var currentTrack = defaultTrack;
+
+  function urlFor(track, seekSeconds) {
+    if (track === defaultTrack) {
+      return streamUrl; // no ?track= -- the fast, Range-enabled path
+    }
+    var url = streamUrl + '?track=' + encodeURIComponent(track);
+    if (seekSeconds && seekSeconds > 0.5) {
+      url += '&t=' + encodeURIComponent(seekSeconds.toFixed(2));
+    }
+    return url;
   }
 
-  // HTMLMediaElement.audioTracks exposes embedded audio tracks (e.g. a
-  // video file muxed with multiple language dubs/commentary tracks) and
-  // lets a track be selected by toggling its `enabled` flag -- decoding
-  // and mixing still happen entirely in the browser/OS media pipeline
-  // (the same native, hardware-accelerated path as normal playback), no
-  // server involvement. Support varies by browser, so this is strictly a
-  // progressive enhancement: with a single track, or without API support,
-  // the file just plays with whatever track the browser picked by default.
-  function setupAudioTracks() {
-    var tracks = video.audioTracks;
-    if (!tracks || tracks.length < 2) return;
-
-    select.innerHTML = '';
-    for (var i = 0; i < tracks.length; i++) {
-      var opt = document.createElement('option');
-      opt.value = String(i);
-      opt.textContent = trackLabel(tracks[i], i);
-      if (tracks[i].enabled) opt.selected = true;
-      select.appendChild(opt);
+  function switchTrack(track, seekSeconds) {
+    var wasPlaying = !video.paused;
+    currentTrack = track;
+    video.src = urlFor(track, seekSeconds);
+    video.load();
+    if (seekSeconds && seekSeconds > 0.5 && track === defaultTrack) {
+      // The fast path supports real Range seeking -- just set currentTime
+      // once metadata is available instead of baking a start offset in.
+      video.addEventListener(
+        'loadedmetadata',
+        function () {
+          video.currentTime = seekSeconds;
+        },
+        { once: true }
+      );
     }
-    row.hidden = false;
-
-    select.addEventListener('change', function () {
-      var chosen = parseInt(select.value, 10);
-      for (var i = 0; i < tracks.length; i++) {
-        try {
-          tracks[i].enabled = i === chosen;
-        } catch (e) {
-          // Some browsers expose the list read-only; nothing to recover here.
-        }
-      }
-    });
-
-    if (tracks.addEventListener) {
-      tracks.addEventListener('change', function () {
-        for (var i = 0; i < tracks.length; i++) {
-          if (tracks[i].enabled) {
-            select.value = String(i);
-            break;
-          }
-        }
+    if (wasPlaying) {
+      video.play().catch(function () {
+        // Autoplay was blocked; the user still has visible controls to hit play.
       });
     }
   }
 
-  video.addEventListener('loadedmetadata', setupAudioTracks);
-  // Some browsers populate audioTracks slightly after loadedmetadata fires.
-  video.addEventListener('canplay', setupAudioTracks);
+  if (select) {
+    select.addEventListener('change', function () {
+      var chosen = parseInt(select.value, 10);
+      if (chosen === currentTrack) return;
+      switchTrack(chosen, video.currentTime);
+    });
+  }
+
+  // Non-default tracks are served by a live ffmpeg remux with no
+  // Content-Length and no Range support (see the server-side comment in
+  // portal/src/index.ts), so the browser can only natively seek within
+  // whatever's already buffered. A seek beyond that would otherwise just
+  // stall -- detect that case and reload the stream starting from the
+  // requested time instead, which restarts the remux at that offset
+  // (fast: ffmpeg only seeks to the nearest keyframe, still copy-only).
+  var seekDebounce = null;
+  video.addEventListener('seeking', function () {
+    if (currentTrack === defaultTrack) return; // native Range seeking handles this fine
+    var target = video.currentTime;
+    var covered = false;
+    for (var i = 0; i < video.buffered.length; i++) {
+      if (target >= video.buffered.start(i) && target <= video.buffered.end(i)) {
+        covered = true;
+        break;
+      }
+    }
+    if (covered) return;
+    clearTimeout(seekDebounce);
+    seekDebounce = setTimeout(function () {
+      switchTrack(currentTrack, target);
+    }, 300);
+  });
 })();

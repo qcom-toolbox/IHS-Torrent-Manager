@@ -232,8 +232,13 @@ install_packages() {
   log "Installing base packages..."
   apt-get install -y -qq --no-install-recommends \
     curl ca-certificates gnupg build-essential python3 sqlite3 \
-    qbittorrent-nox rsync jq >/dev/null
+    qbittorrent-nox rsync jq ffmpeg >/dev/null
   ok "Base packages installed"
+
+  if ! command -v ffprobe >/dev/null 2>&1; then
+    die "ffprobe failed to install (needed by the download portal's in-browser video viewer)"
+  fi
+  ok "ffmpeg $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}') installed"
 
   if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | sed -E 's/^v([0-9]+).*/\1/')" -lt "$NODE_MAJOR" ]]; then
     log "Installing Node.js ${NODE_MAJOR}.x from NodeSource..."

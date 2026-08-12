@@ -192,14 +192,51 @@ addition:
   route. `/stream` sits behind its own, more permissive rate limit than
   `/dl` (600/min vs. 30/min) since a single playback session legitimately
   issues many `Range` requests, not because the security bar is lower.
-- Decoding happens entirely client-side -- the server only ever streams
-  the file's original bytes, never transcodes -- so playback is
-  hardware-accelerated by whatever the viewer's browser/OS provides, the
-  same as any other native `<video>` element. Multi-audio-track files
-  (e.g. multiple dub/commentary tracks muxed into one file) get a track
-  selector built on the standard `HTMLMediaElement.audioTracks` API
-  (`portal/src/public/watch.js`); this is a progressive enhancement that
-  quietly does nothing in browsers that don't support switching it.
+- Video is always decoded entirely client-side, hardware-accelerated by
+  whatever the viewer's browser/OS provides -- this server never
+  transcodes a video stream, full stop.
+- Multi-audio-track files (e.g. multiple dub/commentary tracks muxed into
+  one file) get a track selector. This is *not* built on
+  `HTMLMediaElement.audioTracks`: that API exists on paper but isn't
+  actually implemented for regular file playback in the mainstream
+  browsers this was tested against (`'audioTracks' in videoEl` is simply
+  `false`), so a selector built on it silently can't do anything -- the
+  UI would show a dropdown that visibly does nothing when changed. Track
+  listing and switching are done server-side instead:
+  - `GET /watch/:token` runs `ffprobe` (`probeAudioTracks()` in
+    `shared/src/services/videoTracks.ts`) to list the file's actual audio
+    streams and renders real `<option>` elements from that -- no reliance
+    on browser feature detection to know what's switchable.
+  - Playing the file's default audio track goes through the plain
+    `GET /stream/:token` path: `res.sendFile`, Range-request-enabled, so
+    seeking is instant and there is zero server-side video processing.
+  - Picking a *non-default* track adds `?track=<n>`: ffmpeg remuxes on
+    the fly (`-map 0:v:0 -map 0:a:<n> -c copy -movflags
+    frag_keyframe+empty_moov+... -f mp4 pipe:1`) -- `-c copy` never
+    re-encodes a single frame or audio sample, it only repackages the
+    original video stream plus the chosen audio stream into a fragmented
+    MP4 written straight to the response. Video decode stays 100%
+    client-side; this is a container operation, not transcoding, and is
+    cheap enough to run per-request without a queue or job system.
+  - The tradeoff: a piped, on-the-fly mux has no fixed `Content-Length`
+    and can't serve arbitrary `Range` requests, so seeking on a
+    non-default track can't use HTTP Range either. `watch.js` handles
+    this by watching the `<video>`'s `seeking` event: if the target time
+    is already in `video.buffered`, native seeking just works; if not,
+    it reloads the stream with `?track=<n>&t=<seconds>`, and `-ss`
+    (before `-i`, so it's still a keyframe-accurate copy-seek, not a
+    decode-and-recode) restarts the remux from there. One practical
+    consequence worth knowing: if a track's audio codec isn't one the
+    *browser* can decode (e.g. DTS/AC-3/TrueHD, common on remuxed
+    Blu-ray rips), remuxing it into an MP4 container doesn't make it
+    playable -- the container changes, the codec doesn't. That's an
+    inherent limit of "the server never transcodes," not a bug: playing
+    such a track back would require actual audio transcoding, which is
+    deliberately out of scope here.
+  - If `ffprobe`/`ffmpeg` are missing or a probe fails, the file still
+    plays fine via the plain `/stream` path -- it just won't offer a
+    track switcher (`probeAudioTracks()` returns `[]` on any failure
+    rather than throwing).
 - `Content-Disposition: inline` (not `attachment`) and no `filename`, kept
   consistent with the transport-layer privacy goals above; unlike
   downloads there's no generic-filename step needed since no filename is

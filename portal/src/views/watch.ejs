@@ -12,21 +12,37 @@
       <a href="/" class="logout">&larr; Back to downloads</a>
       <form method="POST" action="/logout">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button type="submit" class="logout" style="all:unset;cursor:pointer;color:var(--muted);font-size:0.85rem;">Sign out</button>
+        <button type="submit" class="logout logout-btn">Sign out</button>
       </form>
     </div>
     <div class="card watch-card">
       <div class="name watch-title"><%= name %></div>
-      <video id="player" class="player" controls playsinline preload="metadata">
+      <video
+        id="player"
+        class="player"
+        controls
+        playsinline
+        preload="metadata"
+        data-stream-url="<%= streamUrl %>"
+        data-default-track="<%= defaultAudioIndex === null ? '' : defaultAudioIndex %>"
+      >
         <source src="<%= streamUrl %>" type="<%= mimeType %>">
       </video>
-      <div id="audio-track-row" class="audio-track-row" hidden>
-        <label for="audio-track-select">Audio track</label>
-        <select id="audio-track-select"></select>
-      </div>
+      <% if (tracks.length > 1) { %>
+        <div id="audio-track-row" class="audio-track-row">
+          <label for="audio-track-select">Audio track</label>
+          <select id="audio-track-select">
+            <% tracks.forEach(function(t) { %>
+              <option value="<%= t.audioIndex %>" <%= t.audioIndex === defaultAudioIndex ? 'selected' : '' %>><%= t.label %></option>
+            <% }); %>
+          </select>
+        </div>
+      <% } %>
       <div class="meta watch-hint">
-        Playback is decoded entirely in your browser (hardware-accelerated where your
-        device/browser supports it) -- nothing is transcoded on the server.
+        Video is always decoded in your browser (hardware-accelerated where your
+        device/browser supports it) -- this server never re-encodes it. Switching
+        audio tracks reloads the stream with that track selected (a brief pause,
+        then playback resumes near where you left off).
       </div>
     </div>
   </div>

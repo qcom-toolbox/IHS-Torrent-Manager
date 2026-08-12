@@ -127,6 +127,19 @@ button:hover { opacity: 0.9; }
 .logout { color: var(--muted); font-size: 0.85rem; text-decoration: none; }
 .logout:hover { color: var(--text); }
 
+.top-bar-title { margin: 0; }
+
+/* Sign-out is a <button> styled to look like the plain-text .logout link;
+   kept as a real class instead of a `style` attribute so it doesn't need
+   'unsafe-inline' in the style-src CSP directive. */
+.logout-btn {
+  all: unset;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.logout-btn:hover { color: var(--text); }
+
 .empty { color: var(--muted); text-align: center; padding: 2rem 0; }
 
 .torrent-item { flex-direction: column; align-items: stretch; gap: 0.5rem; }

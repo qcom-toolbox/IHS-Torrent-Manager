@@ -5,6 +5,7 @@ import archiver from 'archiver';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { spawn } from 'child_process';
 import rateLimit from 'express-rate-limit';
 import {
   runMigrations,
@@ -23,6 +24,10 @@ import {
   resolveStorageRootPath,
   isStreamableVideo,
   videoMimeType,
+  probeAudioTracks,
+  audioTrackLabel,
+  defaultAudioTrackIndex,
+  AudioTrackInfo,
 } from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
 
@@ -361,8 +366,11 @@ export function createApp(): Express {
   // Player page. Doesn't serve any video bytes itself -- it just embeds a
   // <video> tag pointed at /stream/:token, reusing the same token (token
   // redemption isn't single-use; see DownloadTokens.redeem) so the browser
-  // can issue as many Range requests against it as playback needs.
-  app.get('/watch/:token', requirePortalAuth, (req, res) => {
+  // can issue as many requests against it as playback needs. Also probes
+  // the file's actual audio tracks via ffprobe so the track picker (if any)
+  // is built from real data server-side, not from browser feature support
+  // -- see the big comment on /stream below for why.
+  app.get('/watch/:token', requirePortalAuth, async (req, res) => {
     const redeemed = DownloadTokens.redeem(req.params.token);
     if (!redeemed || redeemed.fileIndex === null) {
       res.status(404).send('Not found');
@@ -374,18 +382,44 @@ export function createApp(): Express {
       res.status(404).send('Not found');
       return;
     }
+    const tracks = await probeAudioTracks(file.absPath);
     res.render('watch', {
       name: file.relName,
       streamUrl: `/stream/${req.params.token}`,
       mimeType: videoMimeType(file.relName),
       csrfToken: req.session!.csrfToken,
+      tracks: tracks.map((t) => ({ audioIndex: t.audioIndex, label: audioTrackLabel(t) })),
+      defaultAudioIndex: defaultAudioTrackIndex(tracks),
     });
   });
 
-  // The actual media bytes. Range-enabled (via res.sendFile -> the `send`
-  // package) so seeking works and the browser decodes/plays natively --
-  // this server never transcodes, it only ever streams the file as-is.
-  app.get('/stream/:token', requirePortalAuth, streamLimiter, (req, res) => {
+  // The actual media bytes.
+  //
+  // Two paths, chosen by the presence of ?track=<n>:
+  //
+  // - No ?track (the common case: playing whichever audio track the file
+  //   already defaults to): served directly via res.sendFile, which is
+  //   Range-request-enabled (the `send` package) so seeking is instant and
+  //   the browser decodes/plays entirely natively. This server never
+  //   transcodes video in this path, full stop.
+  //
+  // - ?track=<n>: the browser has no reliable, widely-supported way to
+  //   switch which embedded audio track of an *already-open* file it's
+  //   decoding -- HTMLMediaElement.audioTracks exists on paper but isn't
+  //   actually implemented for regular file playback in mainstream
+  //   browsers (verified directly: `'audioTracks' in videoEl` is false in
+  //   testing here). So instead ffmpeg remuxes on the fly: `-c copy` never
+  //   re-encodes a single frame or audio sample, it only repackages the
+  //   original video stream plus the *chosen* audio stream into a
+  //   fragmented MP4 written straight to the response -- video decode is
+  //   still 100% client-side/hardware-accelerated, this is a container
+  //   operation, not transcoding. The tradeoff: a piped, on-the-fly mux
+  //   has no fixed Content-Length and can't serve arbitrary Range
+  //   requests, so seeking on a non-default track goes through ?t=<sec>
+  //   instead (client reloads the stream from that offset; see watch.js) --
+  //   `-ss` before `-i` seeks to the nearest keyframe, still copy-only, no
+  //   quality loss, just approximate to the keyframe interval.
+  app.get('/stream/:token', requirePortalAuth, streamLimiter, async (req, res) => {
     const redeemed = DownloadTokens.redeem(req.params.token);
     if (!redeemed || redeemed.fileIndex === null) {
       res.status(404).send('Not found');
@@ -398,17 +432,69 @@ export function createApp(): Express {
       res.status(404).send('Not found');
       return;
     }
-    res.set('Content-Type', mime);
-    res.set('Content-Disposition', 'inline');
-    res.set('Cache-Control', 'private, no-store');
-    res.sendFile(file.absPath, (err) => {
-      // sendFile already wrote/started the response by the time an error
-      // can occur here (e.g. client aborted a seek mid-stream) -- nothing
-      // useful to send at that point, just avoid an unhandled rejection.
-      if (err && !res.headersSent) {
-        res.status(404).send('Not found');
+
+    if (req.query.track === undefined) {
+      res.set('Content-Type', mime);
+      res.set('Content-Disposition', 'inline');
+      res.set('Cache-Control', 'private, no-store');
+      res.sendFile(file.absPath, (err) => {
+        // sendFile already wrote/started the response by the time an error
+        // can occur here (e.g. client aborted a seek mid-stream) -- nothing
+        // useful to send at that point, just avoid an unhandled rejection.
+        if (err && !res.headersSent) {
+          res.status(404).send('Not found');
+        }
+      });
+      return;
+    }
+
+    const requestedTrack = parseInt(String(req.query.track), 10);
+    const tracks: AudioTrackInfo[] = await probeAudioTracks(file.absPath);
+    if (!Number.isInteger(requestedTrack) || !tracks.some((t) => t.audioIndex === requestedTrack)) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const seekSeconds = Math.max(0, Number(req.query.t) || 0);
+
+    const args = ['-nostdin', '-v', 'error'];
+    if (seekSeconds > 0) args.push('-ss', String(seekSeconds));
+    args.push(
+      '-i', file.absPath,
+      '-map', '0:v:0',
+      '-map', `0:a:${requestedTrack}`,
+      '-c', 'copy',
+      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+      'pipe:1'
+    );
+
+    const ff = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderrTail = '';
+    ff.stderr.on('data', (chunk) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-4096);
+    });
+    ff.on('error', () => {
+      if (!res.headersSent) res.status(502).send('Playback failed');
+    });
+    ff.on('close', (code) => {
+      if (code !== 0 && code !== null && !res.headersSent) {
+        res.status(502).send('Playback failed');
+      }
+      if (code !== 0 && code !== null) {
+        AuditLog.record(null, 'portal_stream_remux_failed', 'torrent', String(redeemed.torrentId), { stderr: stderrTail.slice(0, 500) }, req.ip);
       }
     });
+    // If the client disconnects (paused, seeked away, tab closed) there's
+    // no one left to write to -- kill the still-running ffmpeg process
+    // rather than leaving it decoding into a dead pipe.
+    res.on('close', () => {
+      if (!ff.killed) ff.kill('SIGKILL');
+    });
+
+    res.set('Content-Type', 'video/mp4');
+    res.set('Content-Disposition', 'inline');
+    res.set('Cache-Control', 'private, no-store');
+    ff.stdout.pipe(res);
   });
 
   // Anything else -- explicitly not found. This app intentionally has no

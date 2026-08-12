@@ -9,10 +9,10 @@
 <body>
   <div class="wrap">
     <div class="top-bar">
-      <h1 style="margin:0;">Completed Downloads</h1>
+      <h1 class="top-bar-title">Completed Downloads</h1>
       <form method="POST" action="/logout">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button type="submit" class="logout" style="all:unset;cursor:pointer;color:var(--muted);font-size:0.85rem;">Sign out</button>
+        <button type="submit" class="logout logout-btn">Sign out</button>
       </form>
     </div>
     <div class="card">
