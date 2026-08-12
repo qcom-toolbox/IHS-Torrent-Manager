@@ -2,6 +2,31 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeResolve } from '../security/paths';
 
+// Extensions the portal will offer an in-browser "Watch" button for, and
+// their MIME types for the Content-Type header. Deliberately conservative:
+// only containers/codecs modern browsers can decode natively (so playback
+// is entirely client-side, GPU-accelerated by the browser/OS -- this app
+// never transcodes). Anything not on this list only ever gets a Download
+// button, never streamed inline.
+const VIDEO_MIME_TYPES: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.ogv': 'video/ogg',
+  '.mkv': 'video/x-matroska',
+};
+
+/** True if `relName`'s extension is one the portal will stream inline for in-browser playback. */
+export function isStreamableVideo(relName: string): boolean {
+  return Object.prototype.hasOwnProperty.call(VIDEO_MIME_TYPES, path.extname(relName).toLowerCase());
+}
+
+/** MIME type to serve a streamable video file as, or null if it isn't one. */
+export function videoMimeType(relName: string): string | null {
+  return VIDEO_MIME_TYPES[path.extname(relName).toLowerCase()] ?? null;
+}
+
 export interface ResolvedTorrentFile {
   /** Verified-safe absolute path on disk. */
   absPath: string;

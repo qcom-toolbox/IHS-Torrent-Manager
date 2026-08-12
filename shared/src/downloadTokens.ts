@@ -11,6 +11,8 @@ export interface IssuedDownloadToken {
 
 export interface RedeemedDownloadToken {
   torrentId: number;
+  /** Which file within the torrent this token is scoped to, or null for "all files". */
+  fileIndex: number | null;
 }
 
 function hashToken(raw: string): string {
@@ -30,7 +32,8 @@ export const DownloadTokens = {
     torrentId: number,
     issuedBy: DownloadTokenIssuer,
     userId: number | null,
-    ttlMs: number
+    ttlMs: number,
+    fileIndex: number | null = null
   ): IssuedDownloadToken {
     const raw = crypto.randomBytes(32).toString('base64url'); // 256 bits of entropy
     const hash = hashToken(raw);
@@ -38,10 +41,10 @@ export const DownloadTokens = {
 
     getDb()
       .prepare(
-        `INSERT INTO download_tokens (token_hash, torrent_id, issued_by, user_id, expires_at)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO download_tokens (token_hash, torrent_id, issued_by, user_id, expires_at, file_index)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(hash, torrentId, issuedBy, userId, expiresAt);
+      .run(hash, torrentId, issuedBy, userId, expiresAt, fileIndex);
 
     // Opportunistic cleanup so the table doesn't grow unbounded; cheap
     // relative to the insert we just did, no separate scheduler needed.
@@ -62,8 +65,8 @@ export const DownloadTokens = {
     const hash = hashToken(rawToken);
     const db = getDb();
     const row = db
-      .prepare(`SELECT id, torrent_id, expires_at FROM download_tokens WHERE token_hash = ?`)
-      .get(hash) as { id: number; torrent_id: number; expires_at: string } | undefined;
+      .prepare(`SELECT id, torrent_id, file_index, expires_at FROM download_tokens WHERE token_hash = ?`)
+      .get(hash) as { id: number; torrent_id: number; file_index: number | null; expires_at: string } | undefined;
 
     if (!row) return null;
     if (new Date(row.expires_at).getTime() < Date.now()) return null;
@@ -72,6 +75,6 @@ export const DownloadTokens = {
       `UPDATE download_tokens SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), use_count = use_count + 1 WHERE id = ?`
     ).run(row.id);
 
-    return { torrentId: row.torrent_id };
+    return { torrentId: row.torrent_id, fileIndex: row.file_index };
   },
 };

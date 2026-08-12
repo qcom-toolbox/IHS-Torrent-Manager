@@ -21,6 +21,8 @@ import {
   DownloadTokens,
   readNoticeText,
   resolveStorageRootPath,
+  isStreamableVideo,
+  videoMimeType,
 } from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
 
@@ -82,7 +84,11 @@ function loadCompletedTorrentFiles(torrentId: number) {
     const downloadDir = resolveStorageRootPath(shared.torrentDownloadDir, torrent.storage_location_id);
     const root = resolveContentRoot(downloadDir, torrent.display_name);
     if (!fs.existsSync(root)) return null;
-    const files = listFilesRecursively(downloadDir, root);
+    // Sorted so a file's numeric index is stable across requests (readdir
+    // order isn't guaranteed) -- the index minted into a watch/download
+    // token at one request must still point at the same file when that
+    // token is redeemed on a later request.
+    const files = listFilesRecursively(downloadDir, root).sort((a, b) => a.relName.localeCompare(b.relName));
     if (files.length === 0) return null;
     return { torrent, files };
   } catch {
@@ -106,6 +112,7 @@ export function createApp(): Express {
     scriptSrc: ["'self'"],
     styleSrc: ["'self'"],
     imgSrc: ["'self'"],
+    mediaSrc: ["'self'"],
     objectSrc: ["'none'"],
     frameAncestors: ["'none'"],
   };
@@ -170,6 +177,17 @@ export function createApp(): Express {
     legacyHeaders: false,
   });
 
+  // Streaming needs a much higher ceiling than one-shot downloads: a single
+  // playback session legitimately issues dozens of Range requests (initial
+  // buffering, every seek/scrub). Still bounded, still per-IP, still on top
+  // of the tokens' own entropy -- just sized for video instead of a single GET.
+  const streamLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'ihs-torrent-manager-portal' });
   });
@@ -224,19 +242,31 @@ export function createApp(): Express {
   });
 
   app.get('/', requirePortalAuth, (req, res) => {
-    const completed = Torrents.allCompleted().map((t) => ({
-      id: t.id,
-      name: t.display_name,
-      sizeFormatted: formatBytes(t.size),
-      completedAtFormatted: formatDate(t.completed_at),
-    }));
+    const completed = Torrents.allCompleted().map((t) => {
+      const loaded = loadCompletedTorrentFiles(t.id);
+      const files = (loaded?.files ?? []).map((f, index) => ({
+        index,
+        name: f.relName,
+        sizeFormatted: formatBytes(f.size),
+        isVideo: isStreamableVideo(f.relName),
+      }));
+      return {
+        id: t.id,
+        name: t.display_name,
+        sizeFormatted: formatBytes(t.size),
+        completedAtFormatted: formatDate(t.completed_at),
+        files,
+      };
+    });
     res.render('downloads', { torrents: completed, csrfToken: req.session!.csrfToken });
   });
 
   // Step 1: mint an opaque, short-lived token for a specific completed
-  // torrent. Requires an active portal session (the "authenticated route
-  // that verifies permissions" this whole design is built around) and a
-  // valid CSRF token, exactly like every other state-changing portal route.
+  // torrent (all files, zipped if there's more than one) or, if :fileIndex
+  // is given, for one single file within it. Requires an active portal
+  // session (the "authenticated route that verifies permissions" this
+  // whole design is built around) and a valid CSRF token, exactly like
+  // every other state-changing portal route.
   app.post('/create-download-link/:id', requirePortalAuth, checkCsrf, (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id) || !loadCompletedTorrentFiles(id)) {
@@ -244,6 +274,19 @@ export function createApp(): Express {
       return;
     }
     const { raw } = DownloadTokens.issue(id, 'portal', null, shared.downloadTokenTtlMs);
+    AuditLog.record(null, 'portal_download_link_created', 'torrent', String(id), undefined, req.ip);
+    res.redirect(`/dl/${raw}`);
+  });
+
+  app.post('/create-download-link/:id/:fileIndex', requirePortalAuth, checkCsrf, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const fileIndex = parseInt(req.params.fileIndex, 10);
+    const loaded = loadCompletedTorrentFiles(id);
+    if (!Number.isInteger(id) || !Number.isInteger(fileIndex) || !loaded || !loaded.files[fileIndex]) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const { raw } = DownloadTokens.issue(id, 'portal', null, shared.downloadTokenTtlMs, fileIndex);
     AuditLog.record(null, 'portal_download_link_created', 'torrent', String(id), undefined, req.ip);
     res.redirect(`/dl/${raw}`);
   });
@@ -269,6 +312,16 @@ export function createApp(): Express {
 
     AuditLog.record(null, 'portal_download', 'torrent', String(torrent.id), undefined, req.ip);
 
+    if (redeemed.fileIndex !== null) {
+      const f = files[redeemed.fileIndex];
+      if (!f) {
+        res.status(404).send('Not found');
+        return;
+      }
+      res.download(f.absPath, genericDownloadFilename(f.relName, 'file'));
+      return;
+    }
+
     if (files.length === 1) {
       const f = files[0];
       res.download(f.absPath, genericDownloadFilename(f.relName, 'file'));
@@ -288,8 +341,80 @@ export function createApp(): Express {
     archive.finalize();
   });
 
+  // Mint a token scoped to one specific video file, then land on a player
+  // page rather than handing back raw bytes -- the page is what wires up
+  // the <video> element and the multi-audio-track selector.
+  app.post('/create-watch-link/:id/:fileIndex', requirePortalAuth, checkCsrf, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const fileIndex = parseInt(req.params.fileIndex, 10);
+    const loaded = loadCompletedTorrentFiles(id);
+    const file = loaded?.files[fileIndex];
+    if (!Number.isInteger(id) || !Number.isInteger(fileIndex) || !file || !isStreamableVideo(file.relName)) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const { raw } = DownloadTokens.issue(id, 'portal', null, shared.downloadTokenTtlMs, fileIndex);
+    AuditLog.record(null, 'portal_watch_link_created', 'torrent', String(id), undefined, req.ip);
+    res.redirect(`/watch/${raw}`);
+  });
+
+  // Player page. Doesn't serve any video bytes itself -- it just embeds a
+  // <video> tag pointed at /stream/:token, reusing the same token (token
+  // redemption isn't single-use; see DownloadTokens.redeem) so the browser
+  // can issue as many Range requests against it as playback needs.
+  app.get('/watch/:token', requirePortalAuth, (req, res) => {
+    const redeemed = DownloadTokens.redeem(req.params.token);
+    if (!redeemed || redeemed.fileIndex === null) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const loaded = loadCompletedTorrentFiles(redeemed.torrentId);
+    const file = loaded?.files[redeemed.fileIndex];
+    if (!file || !isStreamableVideo(file.relName)) {
+      res.status(404).send('Not found');
+      return;
+    }
+    res.render('watch', {
+      name: file.relName,
+      streamUrl: `/stream/${req.params.token}`,
+      mimeType: videoMimeType(file.relName),
+      csrfToken: req.session!.csrfToken,
+    });
+  });
+
+  // The actual media bytes. Range-enabled (via res.sendFile -> the `send`
+  // package) so seeking works and the browser decodes/plays natively --
+  // this server never transcodes, it only ever streams the file as-is.
+  app.get('/stream/:token', requirePortalAuth, streamLimiter, (req, res) => {
+    const redeemed = DownloadTokens.redeem(req.params.token);
+    if (!redeemed || redeemed.fileIndex === null) {
+      res.status(404).send('Not found');
+      return;
+    }
+    const loaded = loadCompletedTorrentFiles(redeemed.torrentId);
+    const file = loaded?.files[redeemed.fileIndex];
+    const mime = file ? videoMimeType(file.relName) : null;
+    if (!file || !mime) {
+      res.status(404).send('Not found');
+      return;
+    }
+    res.set('Content-Type', mime);
+    res.set('Content-Disposition', 'inline');
+    res.set('Cache-Control', 'private, no-store');
+    res.sendFile(file.absPath, (err) => {
+      // sendFile already wrote/started the response by the time an error
+      // can occur here (e.g. client aborted a seek mid-stream) -- nothing
+      // useful to send at that point, just avoid an unhandled rejection.
+      if (err && !res.headersSent) {
+        res.status(404).send('Not found');
+      }
+    });
+  });
+
   // Anything else -- explicitly not found. This app intentionally has no
-  // other routes: no API, no file browser, no config exposure.
+  // other routes: no general file browser, no config exposure, and the
+  // per-torrent file list above only ever shows what a completed torrent's
+  // own download/zip already contains -- nothing broader than that.
   app.use((_req, res) => {
     res.status(404).send('Not found');
   });

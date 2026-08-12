@@ -128,3 +128,97 @@ button:hover { opacity: 0.9; }
 .logout:hover { color: var(--text); }
 
 .empty { color: var(--muted); text-align: center; padding: 2rem 0; }
+
+.torrent-item { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+  border-top: 1px dashed var(--border);
+}
+
+.file-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0 0.6rem 1rem;
+  border-bottom: 1px dashed var(--border);
+}
+
+.file-row:last-child { border-bottom: none; }
+
+.file-name {
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.file-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.file-dl-btn { width: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+
+.watch-btn {
+  flex-shrink: 0;
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  width: auto;
+}
+
+.watch-btn:hover { background: rgba(79, 140, 255, 0.12); opacity: 1; }
+
+.watch-wrap { max-width: 900px; }
+
+.watch-card { padding: 1.25rem; }
+
+.watch-title { margin-bottom: 0.75rem; }
+
+.player {
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+  background: #000;
+  display: block;
+}
+
+.audio-track-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.audio-track-row label {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.audio-track-row select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #101215;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.watch-hint { margin-top: 0.85rem; }

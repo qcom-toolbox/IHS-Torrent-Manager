@@ -171,6 +171,40 @@ anything a party *other than* the authorized downloader could observe --
 not about hiding a file's contents from the person who legitimately
 downloaded it.
 
+### In-browser video playback
+
+The portal can also stream a completed torrent's video files straight into
+the browser (a "Watch" button next to the existing per-file "Download"
+button on the dashboard) instead of only offering a save-to-disk download.
+This reuses the exact same token design as downloads, extended with one
+addition:
+
+- `download_tokens.file_index` scopes a token to one specific file inside
+  a torrent (vs. `NULL`, meaning "the whole torrent"). `POST
+  /create-watch-link/:id/:fileIndex` mints one after checking the file's
+  extension against a small allowlist (`isStreamableVideo()` in
+  `shared/src/services/torrentFiles.ts`: `.mp4`, `.m4v`, `.mov`, `.webm`,
+  `.ogv`, `.mkv`) -- anything else is refused with the same generic 404 as
+  every other invalid-token case.
+- `GET /watch/:token` renders a player page; `GET /stream/:token` serves
+  the actual bytes, Range-request-enabled (via Express's `res.sendFile`)
+  so seeking works. Both require the same portal session as every other
+  route. `/stream` sits behind its own, more permissive rate limit than
+  `/dl` (600/min vs. 30/min) since a single playback session legitimately
+  issues many `Range` requests, not because the security bar is lower.
+- Decoding happens entirely client-side -- the server only ever streams
+  the file's original bytes, never transcodes -- so playback is
+  hardware-accelerated by whatever the viewer's browser/OS provides, the
+  same as any other native `<video>` element. Multi-audio-track files
+  (e.g. multiple dub/commentary tracks muxed into one file) get a track
+  selector built on the standard `HTMLMediaElement.audioTracks` API
+  (`portal/src/public/watch.js`); this is a progressive enhancement that
+  quietly does nothing in browsers that don't support switching it.
+- `Content-Disposition: inline` (not `attachment`) and no `filename`, kept
+  consistent with the transport-layer privacy goals above; unlike
+  downloads there's no generic-filename step needed since no filename is
+  sent at all.
+
 ### Logs
 
 - Neither the panel nor the portal runs a request-URL access logger

@@ -21,15 +21,40 @@
       <% } else { %>
         <ul class="list">
           <% torrents.forEach(function(t) { %>
-            <li class="item">
-              <div>
-                <div class="name"><%= t.name %></div>
-                <div class="meta"><%= t.sizeFormatted %> &middot; Completed: <%= t.completedAtFormatted %></div>
+            <li class="item torrent-item">
+              <div class="item-row">
+                <div>
+                  <div class="name"><%= t.name %></div>
+                  <div class="meta"><%= t.sizeFormatted %> &middot; Completed: <%= t.completedAtFormatted %></div>
+                </div>
+                <% if (t.files.length > 1) { %>
+                  <form method="POST" action="/create-download-link/<%= t.id %>">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="dl-btn">Download all (.zip)</button>
+                  </form>
+                <% } %>
               </div>
-              <form method="POST" action="/create-download-link/<%= t.id %>">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <button type="submit" class="dl-btn">Download</button>
-              </form>
+              <% if (t.files.length > 0) { %>
+                <ul class="file-list">
+                  <% t.files.forEach(function(f) { %>
+                    <li class="file-row">
+                      <div class="file-name"><%= f.name %> <span class="meta">(<%= f.sizeFormatted %>)</span></div>
+                      <div class="file-actions">
+                        <% if (f.isVideo) { %>
+                          <form method="POST" action="/create-watch-link/<%= t.id %>/<%= f.index %>">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button type="submit" class="watch-btn">Watch</button>
+                          </form>
+                        <% } %>
+                        <form method="POST" action="/create-download-link/<%= t.id %>/<%= f.index %>">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button type="submit" class="dl-btn file-dl-btn">Download</button>
+                        </form>
+                      </div>
+                    </li>
+                  <% }); %>
+                </ul>
+              <% } %>
             </li>
           <% }); %>
         </ul>

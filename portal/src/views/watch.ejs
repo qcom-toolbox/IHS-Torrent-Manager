@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watch</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap watch-wrap">
+    <div class="top-bar">
+      <a href="/" class="logout">&larr; Back to downloads</a>
+      <form method="POST" action="/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="logout" style="all:unset;cursor:pointer;color:var(--muted);font-size:0.85rem;">Sign out</button>
+      </form>
+    </div>
+    <div class="card watch-card">
+      <div class="name watch-title"><%= name %></div>
+      <video id="player" class="player" controls playsinline preload="metadata">
+        <source src="<%= streamUrl %>" type="<%= mimeType %>">
+      </video>
+      <div id="audio-track-row" class="audio-track-row" hidden>
+        <label for="audio-track-select">Audio track</label>
+        <select id="audio-track-select"></select>
+      </div>
+      <div class="meta watch-hint">
+        Playback is decoded entirely in your browser (hardware-accelerated where your
+        device/browser supports it) -- nothing is transcoded on the server.
+      </div>
+    </div>
+  </div>
+  <script src="/watch.js"></script>
+</body>
+</html>
