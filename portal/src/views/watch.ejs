@@ -25,8 +25,9 @@
         preload="metadata"
         data-stream-url="<%= streamUrl %>"
         data-default-track="<%= defaultAudioIndex === null ? '' : defaultAudioIndex %>"
+        data-fast-path-eligible="<%= fastPathEligible %>"
       >
-        <source src="<%= streamUrl %>" type="<%= mimeType %>">
+        <source src="<%= initialSrc %>" type="<%= mimeType %>">
       </video>
       <% if (tracks.length > 1) { %>
         <div id="audio-track-row" class="audio-track-row">

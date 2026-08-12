@@ -8,13 +8,22 @@
   var streamUrl = video.dataset.streamUrl;
   var defaultTrackRaw = video.dataset.defaultTrack;
   var defaultTrack = defaultTrackRaw === '' ? null : parseInt(defaultTrackRaw, 10);
+  // False when the default track's own codec isn't browser-decodable (e.g.
+  // AC-3/DTS) -- the server already routed the initial <source> through
+  // the remux+transcode path in that case, so the "fast path" doesn't
+  // exist for this file at all, not even for the default track.
+  var fastPathEligible = video.dataset.fastPathEligible === 'true';
 
   // Which track is currently loaded. Starts at the server-picked default
-  // (the plain, Range-enabled /stream URL with no ?track= at all).
+  // (the plain, Range-enabled /stream URL with no ?track= at all, when eligible).
   var currentTrack = defaultTrack;
 
+  function usesFastPath(track) {
+    return fastPathEligible && track === defaultTrack;
+  }
+
   function urlFor(track, seekSeconds) {
-    if (track === defaultTrack) {
+    if (usesFastPath(track)) {
       return streamUrl; // no ?track= -- the fast, Range-enabled path
     }
     var url = streamUrl + '?track=' + encodeURIComponent(track);
@@ -29,7 +38,7 @@
     currentTrack = track;
     video.src = urlFor(track, seekSeconds);
     video.load();
-    if (seekSeconds && seekSeconds > 0.5 && track === defaultTrack) {
+    if (seekSeconds && seekSeconds > 0.5 && usesFastPath(track)) {
       // The fast path supports real Range seeking -- just set currentTime
       // once metadata is available instead of baking a start offset in.
       video.addEventListener(
@@ -64,7 +73,7 @@
   // (fast: ffmpeg only seeks to the nearest keyframe, still copy-only).
   var seekDebounce = null;
   video.addEventListener('seeking', function () {
-    if (currentTrack === defaultTrack) return; // native Range seeking handles this fine
+    if (usesFastPath(currentTrack)) return; // native Range seeking handles this fine
     var target = video.currentTime;
     var covered = false;
     for (var i = 0; i < video.buffered.length; i++) {

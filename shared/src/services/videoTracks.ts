@@ -83,3 +83,16 @@ export function defaultAudioTrackIndex(tracks: AudioTrackInfo[]): number | null 
   if (tracks.length === 0) return null;
   return tracks.find((t) => t.isDefault)?.audioIndex ?? 0;
 }
+
+// Audio codecs the HTML5 <video> element can actually decode in mainstream
+// browsers. Verified directly (not just from docs): an AC-3 track played
+// back with maxDeviation=0 on an AnalyserNode -- video decoded and played
+// fine, audio was pure silence, no error event at all. This is extremely
+// common on torrent releases (AC-3/DTS/TrueHD are typical for remuxed
+// Blu-ray/DVD rips), so it isn't an edge case worth ignoring.
+const BROWSER_DECODABLE_AUDIO_CODECS = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac']);
+
+/** Whether this track's audio codec needs transcoding to be audible in a browser at all (independent of container). */
+export function needsAudioTranscode(track: Pick<AudioTrackInfo, 'codec'>): boolean {
+  return !track.codec || !BROWSER_DECODABLE_AUDIO_CODECS.has(track.codec.toLowerCase());
+}

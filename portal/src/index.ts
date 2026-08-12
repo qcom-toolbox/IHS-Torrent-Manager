@@ -27,6 +27,7 @@ import {
   probeAudioTracks,
   audioTrackLabel,
   defaultAudioTrackIndex,
+  needsAudioTranscode,
   AudioTrackInfo,
 } from '@ihs-torrent-manager/shared';
 import { portalConfig, shared } from './config';
@@ -383,13 +384,28 @@ export function createApp(): Express {
       return;
     }
     const tracks = await probeAudioTracks(file.absPath);
+    const defaultAudioIndex = defaultAudioTrackIndex(tracks);
+    const defaultTrack = tracks.find((t) => t.audioIndex === defaultAudioIndex) ?? null;
+    // The plain (no ?track) path always hands back the file's original
+    // bytes untouched -- fine when that's already browser-decodable, but
+    // if the default audio track needs transcoding (see needsAudioTranscode
+    // below), the very first thing the player loads has to go through the
+    // remux path too, or playback would start silent before the viewer
+    // ever touches the track picker.
+    const fastPathEligible = tracks.length === 0 || !needsAudioTranscode(defaultTrack ?? { codec: null });
+    const streamUrl = `/stream/${req.params.token}`;
     res.render('watch', {
       name: file.relName,
-      streamUrl: `/stream/${req.params.token}`,
-      mimeType: videoMimeType(file.relName),
+      streamUrl,
+      initialSrc: fastPathEligible ? streamUrl : `${streamUrl}?track=${defaultAudioIndex}`,
+      fastPathEligible,
+      // The remux path always outputs fragmented MP4 regardless of the
+      // original container, so the <source type> must say so too, or the
+      // browser may refuse to even attempt playback.
+      mimeType: fastPathEligible ? videoMimeType(file.relName) : 'video/mp4',
       csrfToken: req.session!.csrfToken,
       tracks: tracks.map((t) => ({ audioIndex: t.audioIndex, label: audioTrackLabel(t) })),
-      defaultAudioIndex: defaultAudioTrackIndex(tracks),
+      defaultAudioIndex,
     });
   });
 
@@ -408,17 +424,19 @@ export function createApp(): Express {
   //   decoding -- HTMLMediaElement.audioTracks exists on paper but isn't
   //   actually implemented for regular file playback in mainstream
   //   browsers (verified directly: `'audioTracks' in videoEl` is false in
-  //   testing here). So instead ffmpeg remuxes on the fly: `-c copy` never
-  //   re-encodes a single frame or audio sample, it only repackages the
-  //   original video stream plus the *chosen* audio stream into a
-  //   fragmented MP4 written straight to the response -- video decode is
-  //   still 100% client-side/hardware-accelerated, this is a container
-  //   operation, not transcoding. The tradeoff: a piped, on-the-fly mux
-  //   has no fixed Content-Length and can't serve arbitrary Range
-  //   requests, so seeking on a non-default track goes through ?t=<sec>
-  //   instead (client reloads the stream from that offset; see watch.js) --
-  //   `-ss` before `-i` seeks to the nearest keyframe, still copy-only, no
-  //   quality loss, just approximate to the keyframe interval.
+  //   testing here). So instead ffmpeg remuxes on the fly, video always
+  //   `-c:v copy` (never re-encoded -- decode stays 100%
+  //   client-side/hardware-accelerated), audio `-c:a copy` *unless* the
+  //   track's codec isn't one browsers can decode at all (AC-3/DTS/TrueHD,
+  //   common on remuxed Blu-ray/DVD rips -- verified directly too: such a
+  //   track plays with the video advancing normally and zero decoded audio
+  //   signal, no error event), in which case audio alone gets transcoded to
+  //   AAC (cheap; nowhere near the cost video transcoding would be). The
+  //   tradeoff: a piped, on-the-fly mux has no fixed Content-Length and
+  //   can't serve arbitrary Range requests, so seeking on this path goes
+  //   through ?t=<sec> instead (client reloads the stream from that
+  //   offset; see watch.js) -- `-ss` before `-i` seeks to the nearest
+  //   keyframe, so video is still copy-only there too.
   app.get('/stream/:token', requirePortalAuth, streamLimiter, async (req, res) => {
     const redeemed = DownloadTokens.redeem(req.params.token);
     if (!redeemed || redeemed.fileIndex === null) {
@@ -450,11 +468,24 @@ export function createApp(): Express {
 
     const requestedTrack = parseInt(String(req.query.track), 10);
     const tracks: AudioTrackInfo[] = await probeAudioTracks(file.absPath);
-    if (!Number.isInteger(requestedTrack) || !tracks.some((t) => t.audioIndex === requestedTrack)) {
+    const track = tracks.find((t) => t.audioIndex === requestedTrack);
+    if (!Number.isInteger(requestedTrack) || !track) {
       res.status(404).send('Not found');
       return;
     }
     const seekSeconds = Math.max(0, Number(req.query.t) || 0);
+
+    // Video is *never* re-encoded here, only ever repackaged (-c:v copy).
+    // Audio is copied too when the browser can actually decode the
+    // original codec -- but formats like AC-3/DTS/TrueHD (common on
+    // remuxed Blu-ray/DVD rips) aren't decodable by any mainstream
+    // browser at all: the container would be fine, the codec wouldn't be,
+    // and the result is silent video with no error. Transcoding just the
+    // audio stream to AAC is cheap (audio encode is a tiny fraction of the
+    // cost of video encode) and is the only way to make such a track
+    // audible in-browser without asking the browser to do something it
+    // fundamentally can't.
+    const audioCodecArgs = needsAudioTranscode(track) ? ['-c:a', 'aac', '-b:a', '192k'] : ['-c:a', 'copy'];
 
     const args = ['-nostdin', '-v', 'error'];
     if (seekSeconds > 0) args.push('-ss', String(seekSeconds));
@@ -462,7 +493,8 @@ export function createApp(): Express {
       '-i', file.absPath,
       '-map', '0:v:0',
       '-map', `0:a:${requestedTrack}`,
-      '-c', 'copy',
+      '-c:v', 'copy',
+      ...audioCodecArgs,
       '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
       '-f', 'mp4',
       'pipe:1'
