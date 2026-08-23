@@ -82,7 +82,7 @@ export default function TorrentTable({
                     <button onClick={() => actions.onRecheck!(t)} className="btn-xs">Recheck</button>
                   )}
                   <button onClick={() => actions.onDelete(t)} className="btn-xs btn-xs-danger">Delete</button>
-                  {isAdmin && actions.onDeleteWithData && (
+                  {actions.onDeleteWithData && (
                     <button onClick={() => actions.onDeleteWithData!(t)} className="btn-xs btn-xs-danger">
                       Delete + Data
                     </button>
