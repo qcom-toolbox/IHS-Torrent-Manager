@@ -258,7 +258,7 @@ export function createApp(): Express {
       }));
       return {
         id: t.id,
-        name: t.display_name,
+        name: t.custom_name || t.display_name,
         sizeFormatted: formatBytes(t.size),
         completedAtFormatted: formatDate(t.completed_at),
         files,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { Torrent } from '../types';
@@ -7,6 +7,7 @@ import ProgressBar from '../components/ProgressBar';
 import { formatBytes, formatSpeed, formatDate, formatEta } from '../lib/format';
 import { useTorrentActions } from '../lib/useTorrentActions';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast } from '../lib/ToastContext';
 
 interface QbtFile {
   name: string;
@@ -27,6 +28,9 @@ export default function TorrentDetails() {
   const [events, setEvents] = useState<TorrentEvent[]>([]);
   const [files, setFiles] = useState<QbtFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const { notify } = useToast();
 
   async function load() {
     try {
@@ -48,6 +52,18 @@ export default function TorrentDetails() {
     api.get<{ files: QbtFile[] }>(`/torrents/${id}/files`).then((res) => setFiles(res.files)).catch(() => setFiles([]));
   }, [id]);
 
+  async function saveName(e: FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await api.patch<{ torrent: Torrent }>(`/torrents/${id}/rename`, { name: draft });
+      setTorrent(res.torrent);
+      setEditing(false);
+      notify(draft.trim() ? 'Torrent renamed' : 'Custom name cleared', 'success');
+    } catch (err: any) {
+      notify(err.message ?? 'Rename failed', 'error');
+    }
+  }
+
   const { actions, confirmDialog, confirmAction, cancelConfirm } = useTorrentActions(load);
 
   if (error) return <div className="text-red-600">{error}</div>;
@@ -57,7 +73,34 @@ export default function TorrentDetails() {
     <div className="flex flex-col gap-6">
       <div>
         <Link to="/torrents" className="text-sm text-blue-600 hover:underline dark:text-blue-400">← Back to My Torrents</Link>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">{torrent.name}</h1>
+        {editing ? (
+          <form onSubmit={saveName} className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              autoFocus
+              value={draft}
+              maxLength={200}
+              placeholder={torrent.originalName}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-lg dark:border-slate-700 dark:bg-slate-900"
+            />
+            <button type="submit" className="btn-xs btn-xs-primary">Save</button>
+            <button type="button" onClick={() => setEditing(false)} className="btn-xs">Cancel</button>
+          </form>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{torrent.name}</h1>
+            <button
+              onClick={() => { setDraft(torrent.customName ?? torrent.name); setEditing(true); }}
+              className="btn-xs"
+            >
+              Rename
+            </button>
+          </div>
+        )}
+        {torrent.customName && !editing && (
+          <div className="mt-1 text-xs text-slate-400">Original name: {torrent.originalName}</div>
+        )}
       </div>
 
       <div className="card">

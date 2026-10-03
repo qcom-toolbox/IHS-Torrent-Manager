@@ -13,6 +13,8 @@ export interface Torrent {
   userId: number;
   owner?: string;
   name: string;
+  originalName: string;
+  customName: string | null;
   status: TorrentStatus;
   progress: number;
   downloadSpeed: number;

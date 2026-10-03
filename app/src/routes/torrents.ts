@@ -50,7 +50,10 @@ function serializeTorrent(t: ReturnType<typeof Torrents.findById>, ownerUsername
     // filename isn't used anywhere in the UI, so it isn't sent over the
     // wire. It still lives in the DB (torrents.original_filename) purely
     // for admin/audit purposes.
-    name: t.display_name,
+    name: t.custom_name || t.display_name,
+    // The real (qBittorrent) name, so the UI can show it next to a custom one.
+    originalName: t.display_name,
+    customName: t.custom_name,
     status: t.status,
     progress: t.progress,
     downloadSpeed: t.download_speed,
@@ -221,6 +224,28 @@ router.get('/:id/files', async (req: AuthedRequest, res) => {
   } catch (err: any) {
     res.status(502).json({ error: `Unable to fetch file list: ${err.message}` });
   }
+});
+
+// Rename is a label only: it never touches qBittorrent or the files on
+// disk, so downloads/streaming keep working. Empty string clears it.
+router.patch('/:id/rename', requireCsrf, (req: AuthedRequest, res) => {
+  const torrent = loadOwnedTorrent(req, res);
+  if (!torrent) return;
+  const raw = req.body?.name;
+  if (typeof raw !== 'string') {
+    res.status(400).json({ error: 'A name is required' });
+    return;
+  }
+  // Collapse whitespace/control characters; the UI renders this as text.
+  const name = raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  if (name.length > 200) {
+    res.status(400).json({ error: 'Name must be 200 characters or fewer' });
+    return;
+  }
+  Torrents.setCustomName(torrent.id, name || null);
+  TorrentEvents.add(torrent.id, 'renamed', name ? `Renamed to "${name}"` : 'Custom name cleared');
+  AuditLog.record(req.currentUser!.id, 'torrent_rename', 'torrent', String(torrent.id), { name }, req.ip);
+  res.json({ torrent: serializeTorrent(Torrents.findById(torrent.id)) });
 });
 
 async function doAction(

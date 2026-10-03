@@ -23,6 +23,8 @@ export interface Torrent {
   user_id: number;
   original_filename: string;
   display_name: string;
+  /** User-chosen label; NULL falls back to display_name. Never used for on-disk lookups. */
+  custom_name: string | null;
   status: TorrentStatus;
   progress: number;
   download_speed: number;
@@ -172,6 +174,9 @@ export const Torrents = {
         `UPDATE torrents SET ${setClause}, last_synced_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE torrent_hash = ?`
       )
       .run(...values, hash);
+  },
+  setCustomName(id: number, customName: string | null): void {
+    getDb().prepare('UPDATE torrents SET custom_name = ? WHERE id = ?').run(customName, id);
   },
   markMissing(hashesPresent: string[]): void {
     const db = getDb();
